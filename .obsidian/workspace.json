@@ -13,28 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "test.md",
+                "file": "Roberts & Smith MetaG Data Processing.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "test"
-            }
-          }
-        ]
-      },
-      {
-        "id": "850db27b316c6ca8",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "f351126fa6866744",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "title": "Roberts & Smith MetaG Data Processing"
             }
           }
         ]
@@ -201,6 +185,11 @@
   "active": "b31a960b73b92051",
   "lastOpenFiles": [
     "test.md",
+    "Roberts & Smith MetaG Data Processing.md",
+    "Microgale Microbiome Workflow.md",
+    "sahar_mouse_commands.md",
+    "Roberts & Smith MetaG single metagenome testing Part 1.md",
+    "Cristina_village_2026.md",
     "Welcome.md"
   ]
 }
