@@ -1,7 +1,7 @@
 
 # Directory Structure 
-- per sample directories with: raw_reads, processed_reads, assembly, slurm subdirectories
-- CURC sofrware https://curc.readthedocs.io/en/latest/software/curc_provided_software.html
+- per sample directories with: raw_reads, processed_reads, fastqc, assembly subdirectories
+- CURC software https://curc.readthedocs.io/en/latest/software/curc_provided_software.html
 
 ```
 
@@ -430,13 +430,19 @@ multiqc \
  multiqc | Flat-image plots used. Disable with '--interactive'. See docs.| 
  multiqc | MultiQC complete
 
-### Questions:
+### Questions/Notes:
 1. How many reads did we lose?
-2. were adapters actually removed? Yes!
-3. Does the number of R1 and R2 reads match?
-4. Note the quality metrics- have they improved?
+	1. looks like for the samples, we lost around 800k reads per sample. but sample reads are still around 20mil 
+2. were adapters actually removed? 
+	1. Yes!
+3. Does the number of R1 and R2 reads match? 
+	1. yes they do match, some of the controls are less like around 132 and 145bp
+4. Note the quality metrics- have they improved? 
+	1. quality looks good
+	2. Most samples have greater than 10 million reads per read/sample
+5. the per base sequence count is still a little wonky for the first few base pairs; sounds like its a normal result of library prep methods which use tagmentation. see [here](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/3%20Analysis%20Modules/4%20Per%20Base%20Sequence%20Content.html) and kit with tagmentations protocol [here](). 
 
-CHECK THE KIT AND MAKE SURE THE PER SEQUENCE CONTENT DISTRIBUTION IS ACCURATE....
+file:///Users/valerielindstrom/Downloads/trimmed_multiqc_report%20(1).html 
 
 # zip or delete raw reads
 At this point, we will only proceed with the trimmed reads. As such, let's either zip the raw reads to save space or delete them from the working directory.

@@ -1,4 +1,4 @@
-Part 1: Data upload through trimming reads
+Part 1: Data upload through trimming reads, and removing adapters; reruning final QC check
 
 Training Doc: https://docs.google.com/presentation/d/1hXJD7P0WjOE-iaKu9HhdtIVDVLCY8hIjD71KNBJ04WY/edit?slide=id.g3cd05613a6c_0_62#slide=id.g3cd05613a6c_0_62
 
@@ -23,6 +23,9 @@ Step 8: Install Sickle on Alpine
 
 Step 9: Run sickle on the raw reads
 
+Step 10: Run bbduk (from the BBTools Package, bbtools/v39.01) to remove adapters
+
+Step 11: redo fastqc and make sure we pass checks and adapters were removed
 
 ----------------------------------------------------------------
 
@@ -288,7 +291,180 @@ bash 03_trim_sickle_loop.sh ../sample_list.txt
 sbatch 03_trim_sickle.sh
 
 
+## Step 10: Run bbduk (from the BBTools Package, bbtools/v39.01) to remove adapters
+https://archive.jgi.doe.gov/data-and-tools/software-tools/bbtools/bb-tools-user-guide/bbduk-guide/
+
+```
+#this it the loop
+
+#!/bin/bash
+
+while read -r element
+do
+  (
+    cd "/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/$element/processed_reads" || exit 1
+
+	bbduk.sh \
+    threads=4 \
+    overwrite=t \
+    in1="${element}_R1_trimmed.fastq" \
+    in2="${element}_R2_trimmed.fastq" \
+    ktrim=r \
+    k=23 \
+    mink=11 \
+    hdist=1 \
+    tpe \
+    tbo \
+    ref=/curc/sw/install/bio/bbtools/bbmap/resources/adapters.fa \
+    out1="${element}_R1_bbduktrimmed.fastq \
+    out2="${element}_R2_bbduktrimmed.fastq
+
+  ) &
+
+  # 4 parallel jobs
+  if [[ $(jobs -r -p | wc -l) -ge 4 ]]; then
+    wait
+  fi
+
+done < "$1"
+
+wait
+
+```
+04_bbduk_loop.sh
+
+```
+#!/bin/bash
+#SBATCH --job-name=bbduk
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --time=23:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --output=slurm_output/bbduk_%j.out
+#SBATCH --error=slurm_output/bbduk_%j.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+
+module load bbtools
+bash 04_bbduk_loop.sh ../sample_list.txt
+```
+
+sbatch 04_bbduk.sh
+
+## Notes on bbduk parameters: 
+- **ktrim=r means k-mer based trimming**: In ktrim=r mode, once a reference kmer is matched in a read, that kmer and all the bases to the right will be trimmed, leaving only the bases to the left; this is the normal mode for adapter trimming. this goes hand-in-hand with using a reference (this line ref=...adapters.fa)
+
+- hdist is hamming distance, 1 is good, this allows one mismatch.
+
+- flags “tbo”, which specifies to also trim adapters based on pair overlap detection using BBMerge (which does not require known adapter sequences), and “tpe”, which specifies to trim both reads to the same length (in the event that an adapter kmer was only detected in one of them).
 
 
+```
+#count the bbduk trimmed files to make sure it ran on all of them: 
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
 
+count=0  
+while read sample; do  
+compgen -G "${sample}/processed_reads/*R1_bbduktrimmed.fastq" > /dev/null && ((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/processed_reads/*R2_bbduktrimmed.fastq" >  /dev/null && ((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88 yay!
+```
+
+
+## Step 11: redo fastqc and make sure we pass checks and adapters were removed. 
+
+```
+#!/bin/bash  
+#SBATCH --job-name=fastqc_trimmed  
+#SBATCH --partition=amilan  
+#SBATCH --qos=normal  
+#SBATCH --time=08:00:00  
+#SBATCH --cpus-per-task=16  
+#SBATCH --mem=64G  
+#SBATCH --output=fastqc_%j.out  
+#SBATCH --error=fastqc_%j.err  
+#SBATCH --mail-type=ALL  
+#SBATCH --mail-user=lindsval@colostate.edu  
+  
+module load fastqc  
+  
+# Go to your working directory  
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
+
+while read sample; do
+    TRIMMED_DIR="${sample}/processed_reads"
+    OUT_DIR="${sample}/fastqc/trimmed"
+
+    for fq in "$TRIMMED_DIR"/*_R[12]_bbduktrimmed.fastq; do
+        [ -e "$fq" ] || continue
+        fastqc -t 16 "$fq" -o "$OUT_DIR"
+    done
+done < sample_list.txt
+```
+Submitted batch job 24986389
+
+```
+count=0  
+while read sample; do  
+compgen -G "${sample}/fastqc/trimmed/*R1_bbduktrimmed_fastqc.html" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/fastqc/trimmed/*R2_bbduktrimmed_fastqc.html" > /dev/null && ((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+```
+
+## multiqc
+
+```
+#use multiqc to generate one report for all fastqc_data.txt files from trimmed reads
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
+module load anaconda
+conda activate multiqc
+
+
+multiqc \
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/*/fastqc/trimmed/*bbduktrimmed*_fastqc.zip \
+--outdir /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/multiqc_trimmed \
+--filename trimmed_multiqc_report.html
+
+```
+
+### Output 
+ 100% 176/176 | fastqc | Found 176 reports| multiqc | Report : ../../../../../scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/multiqc_trimmed/trimmed_multiqc_report.html| 
+ multiqc | 
+ Data : ../../../../../scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/multiqc_trimmed/trimmed_multiqc_report_data| 
+ multiqc | Flat-image plots used. Disable with '--interactive'. See docs.| 
+ multiqc | MultiQC complete
+
+### Questions/Notes:
+1. How many reads did we lose?
+	1. check the multiqc_fastqc.txt from each multiqc run and compare the number of "Total Sequences" to find how many reads were removed per file.
+2. were adapters actually removed? 
+3. Does the number of R1 and R2 reads match? 
+4. Note the quality metrics- have they improved? 
+5. NOTE ABOUTE PER BASE SEQUENCES: the per base sequence count is still a little wonky for the first few base pairs; sounds like its a normal result of library prep methods which use tagmentation. see [here](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/3%20Analysis%20Modules/4%20Per%20Base%20Sequence%20Content.html) and your kit with tagmentations protocol [here](). 
+
+# zip or delete raw reads
+At this point, we will only proceed with the trimmed reads. As such, let's either zip the raw reads to save space or delete them from the working directory.
 

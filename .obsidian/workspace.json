@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roberts & Smith MetaG Data Processing.md",
+                "file": "Roberts & Smith MetaG single metagenome testing Part 1.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Roberts & Smith MetaG Data Processing"
+              "title": "Roberts & Smith MetaG single metagenome testing Part 1"
             }
           }
         ]
@@ -184,11 +184,11 @@
   },
   "active": "b31a960b73b92051",
   "lastOpenFiles": [
-    "test.md",
     "Roberts & Smith MetaG Data Processing.md",
-    "Microgale Microbiome Workflow.md",
-    "sahar_mouse_commands.md",
     "Roberts & Smith MetaG single metagenome testing Part 1.md",
+    "sahar_mouse_commands.md",
+    "test.md",
+    "Microgale Microbiome Workflow.md",
     "Cristina_village_2026.md",
     "Welcome.md"
   ]
