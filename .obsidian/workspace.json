@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roberts & Smith MetaG single metagenome testing Part 1.md",
+                "file": "Roberts & Smith MetaG Training Part 1.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Roberts & Smith MetaG single metagenome testing Part 1"
+              "title": "Roberts & Smith MetaG Training Part 1"
             }
           }
         ]
@@ -185,7 +185,7 @@
   "active": "b31a960b73b92051",
   "lastOpenFiles": [
     "Roberts & Smith MetaG Data Processing.md",
-    "Roberts & Smith MetaG single metagenome testing Part 1.md",
+    "Roberts & Smith MetaG Training Part 1.md",
     "sahar_mouse_commands.md",
     "test.md",
     "Microgale Microbiome Workflow.md",
