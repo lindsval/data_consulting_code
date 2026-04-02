@@ -447,3 +447,108 @@ file:///Users/valerielindstrom/Downloads/trimmed_multiqc_report%20(1).html
 # zip or delete raw reads
 At this point, we will only proceed with the trimmed reads. As such, let's either zip the raw reads to save space or delete them from the working directory.
 
+```
+#!/bin/bash
+#SBATCH --job-name=zip_reads
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --time=23:00:00
+#SBATCH --mem=64G
+#SBATCH --cpus-per-task=8
+#SBATCH --output=slurm_output/zip_%j.out
+#SBATCH --error=slurm_output/zip_%j.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+
+module load pigz
+
+while read SAMPLE; do
+find /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/${SAMPLE}/raw_reads \ 
+-type f ! -name "*.gz" -exec pigz {} +
+done < /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt
+```
+sbatch 06_zip_raw_reads.sh
+Submitted batch job 25178913
+
+
+## install MEGAHIT 
+
+```
+acompile --ntasks=4 --time=03:00:00
+module load anaconda
+conda create -n megahit
+conda activate megahit
+conda install -c bioconda megahit
+megahit -v
+#this should print: MEGAHIT v1.2.9
+```
+
+## Assemble trimmed reads using MEGAHIT (v1.2.9)
+
+```
+#!/bin/bash
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# number of samples to run at once
+MAX_JOBS=5
+
+while read SAMPLE; do
+  (
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+
+    # check files exist
+    if [[ -f "$R1" && -f "$R2" ]]; then
+      echo "Running MEGAHIT for $SAMPLE"
+
+      megahit \
+        -1 "$R1" \
+        -2 "$R2" \
+        --k-min 31 --k-max 121 --k-step 10 \
+        -m 0.4 \
+        -t 10 \
+        -o "$OUTDIR"
+
+    else
+      echo "Missing reads for $SAMPLE" >&2
+    fi
+  ) &
+
+  # limit number of concurrent jobs
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+
+done < "$SAMPLE_LIST"
+
+wait
+```
+07_megahit_individual_assembly_loop.sh
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=megahit
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --time=23:00:00
+#SBATCH --mem=64G
+#SBATCH --cpus-per-task=55
+#SBATCH --output=slurm_output/megahit_%j.out
+#SBATCH --error=slurm_output/megahit_%j.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+
+
+module load anaconda
+conda activate megahit
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
+
+bash 07_megahit_individual_assembly_loop.sh 
+```
+07_megahit_individual_assembly.sh
+Submitted batch job 25178897
