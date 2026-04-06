@@ -470,6 +470,28 @@ done < /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.tx
 sbatch 06_zip_raw_reads.sh
 Submitted batch job 25178913
 
+```
+#check they were all zipped
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/raw_reads/*R1*.gz" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/raw_reads/*R2*.gz" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+```
+
 
 ## install MEGAHIT 
 
@@ -532,15 +554,15 @@ wait
 
 #!/bin/bash
 #SBATCH --job-name=megahit
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
-#SBATCH --time=23:00:00
-#SBATCH --mem=64G
+#SBATCH --nodes=1
 #SBATCH --cpus-per-task=55
-#SBATCH --output=slurm_output/megahit_%j.out
-#SBATCH --error=slurm_output/megahit_%j.err
+#SBATCH --partition=amem
+#SBATCH --qos=mem
+#SBATCH --time=168:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahit_%j.out
+#SBATCH --error=slurm_output/megahit_%j.err
 
 
 module load anaconda
@@ -551,4 +573,12 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
 bash 07_megahit_individual_assembly_loop.sh 
 ```
 07_megahit_individual_assembly.sh
-Submitted batch job 25178897
+Submitted batch job 25224839
+
+
+```
+#test assembly stats on one metaG
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
+
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats.pl -i /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa -o Drought_Rhizo_Post_11_final.contigs_STATS
+```
