@@ -577,8 +577,310 @@ Submitted batch job 25224839
 
 
 ```
+#check they were all run
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#83.....
+
+while read sample; do  
+if ! compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null; then  
+echo "$sample"  
+fi  
+done < sample_list.txt
+
+#these samples did not get assembled. 
+Control_BulkSoil_Post_6
+Control_Rhizo_Post_6
+Drought_BulkSoil_Post_7
+Drought_Rhizo_Post_7
+DroughtDeluge_BulkSoil_Post_8
+
+#why...these were the 5 that were in the middle of assembly when the first assembly job timed out... confirmed in the megahit_25178897.out file. 
+
+#delete the megahit dirs
+rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Control_BulkSoil_Post_6/assembly/megahit_out  
+rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Control_Rhizo_Post_6/assembly/megahit_out  
+rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Drought_BulkSoil_Post_7/assembly/megahit_out  
+rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Drought_Rhizo_Post_7/assembly/megahit_out  
+rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//DroughtDeluge_BulkSoil_Post_8/assembly/megahit_out
+
+```
+
+
+#### Rerun MEGAHIT on the 5 samples that need it
+
+```
+#!/bin/bash
+#SBATCH --job-name=megahit_rerun_on_5_samples
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=55
+#SBATCH --qos=normal
+#SBATCH --time=23:00:00
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahit_rerun_on_5_samples_%j.out
+#SBATCH --error=slurm_output/megahit_rerun_on_5_samples_%j.err
+
+module load anaconda
+conda activate megahit
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+megahit \
+  -1 "$BASE_DIR/Control_BulkSoil_Post_6/processed_reads/Control_BulkSoil_Post_6_R1_bbduktrimmed.fastq" \
+  -2 "$BASE_DIR/Control_BulkSoil_Post_6/processed_reads/Control_BulkSoil_Post_6_R2_bbduktrimmed.fastq" \
+  --k-min 31 --k-max 121 --k-step 10 \
+  -m 0.4 \
+  -t 10 \
+  -o "$BASE_DIR/Control_BulkSoil_Post_6/assembly/megahit_out" &
+
+megahit \
+  -1 "$BASE_DIR/Control_Rhizo_Post_6/processed_reads/Control_Rhizo_Post_6_R1_bbduktrimmed.fastq" \
+  -2 "$BASE_DIR/Control_Rhizo_Post_6/processed_reads/Control_Rhizo_Post_6_R2_bbduktrimmed.fastq" \
+  --k-min 31 --k-max 121 --k-step 10 \
+  -m 0.4 \
+  -t 10 \
+  -o "$BASE_DIR/Control_Rhizo_Post_6/assembly/megahit_out" &
+
+megahit \
+  -1 "$BASE_DIR/Drought_BulkSoil_Post_7/processed_reads/Drought_BulkSoil_Post_7_R1_bbduktrimmed.fastq" \
+  -2 "$BASE_DIR/Drought_BulkSoil_Post_7/processed_reads/Drought_BulkSoil_Post_7_R2_bbduktrimmed.fastq" \
+  --k-min 31 --k-max 121 --k-step 10 \
+  -m 0.4 \
+  -t 10 \
+  -o "$BASE_DIR/Drought_BulkSoil_Post_7/assembly/megahit_out" &
+
+megahit \
+  -1 "$BASE_DIR/Drought_Rhizo_Post_7/processed_reads/Drought_Rhizo_Post_7_R1_bbduktrimmed.fastq" \
+  -2 "$BASE_DIR/Drought_Rhizo_Post_7/processed_reads/Drought_Rhizo_Post_7_R2_bbduktrimmed.fastq" \
+  --k-min 31 --k-max 121 --k-step 10 \
+  -m 0.4 \
+  -t 10 \
+  -o "$BASE_DIR/Drought_Rhizo_Post_7/assembly/megahit_out" &
+
+megahit \
+  -1 "$BASE_DIR/DroughtDeluge_BulkSoil_Post_8/processed_reads/DroughtDeluge_BulkSoil_Post_8_R1_bbduktrimmed.fastq" \
+  -2 "$BASE_DIR/DroughtDeluge_BulkSoil_Post_8/processed_reads/DroughtDeluge_BulkSoil_Post_8_R2_bbduktrimmed.fastq" \
+  --k-min 31 --k-max 121 --k-step 10 \
+  -m 0.4 \
+  -t 10 \
+  -o "$BASE_DIR/DroughtDeluge_BulkSoil_Post_8/assembly/megahit_out" &
+
+wait
+
+
+```
+Submitted batch job 25281224
+
+
+
+
+```
 #test assembly stats on one metaG
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
 
-/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats.pl -i /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa -o Drought_Rhizo_Post_11_final.contigs_STATS
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats.pl \
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa \
+> Drought_Rhizo_Post_11_final.contigs_STATS.txt
+
+
+#this produces a very limited stats summary, can we get a better summary?
 ```
+
+
+### contigs stats, save this in a new directory called custom_scripts
+```
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $file = shift or die "Usage: contig_stats_full.pl <fasta>\n";
+
+open(my $fh, "<", $file) or die "Cannot open $file\n";
+
+my @lengths;
+my @seqs;
+my $seq = "";
+
+while (<$fh>) {
+    chomp;
+    if (/^>/) {
+        if ($seq ne "") {
+            push @seqs, $seq;
+            push @lengths, length($seq);
+        }
+        $seq = "";
+    } else {
+        $seq .= $_;
+    }
+}
+# last seq
+if ($seq ne "") {
+    push @seqs, $seq;
+    push @lengths, length($seq);
+}
+
+my $total_seqs = scalar(@seqs);
+my $total_bp = 0;
+$total_bp += $_ for @lengths;
+
+my $avg = $total_bp / $total_seqs;
+
+# N50
+my @sorted = sort { $b <=> $a } @lengths;
+my $cum = 0;
+my $n50 = 0;
+for my $len (@sorted) {
+    $cum += $len;
+    if ($cum >= $total_bp / 2) {
+        $n50 = $len;
+        last;
+    }
+}
+
+# length bins
+my %bins = (
+    "0-100" => [0,100],
+    "100-500" => [100,500],
+    "500-1000" => [500,1000],
+    "1000-5000" => [1000,5000],
+    "5000-10000" => [5000,10000],
+    "10000-20000" => [10000,20000],
+    "20000-50000" => [20000,50000],
+    "50000-100000" => [50000,100000],
+    "100000-500000" => [100000,500000],
+    "500000+" => [500000,1e12],
+);
+
+my %counts;
+my %bps;
+
+foreach my $len (@lengths) {
+    foreach my $bin (keys %bins) {
+        my ($min,$max) = @{$bins{$bin}};
+        if ($len >= $min && $len < $max) {
+            $counts{$bin}++;
+            $bps{$bin} += $len;
+            last;
+        }
+    }
+}
+
+print "Length distribution\n";
+print "===================\n\n";
+print "Range\t# contigs (%)\t# bps (%)\n";
+
+foreach my $bin (keys %bins) {
+    my $c = $counts{$bin} // 0;
+    my $b = $bps{$bin} // 0;
+    my $c_pct = $total_seqs ? sprintf("%.2f", $c/$total_seqs*100) : 0;
+    my $b_pct = $total_bp ? sprintf("%.2f", $b/$total_bp*100) : 0;
+
+    print "$bin:\t$c ($c_pct%)\t$b ($b_pct%)\n";
+}
+
+print "\nGeneral Information\n";
+print "==================\n\n";
+print "Total number of sequences: $total_seqs\n";
+print "Total number of bps:       $total_bp\n";
+print "Average sequence length:   " . sprintf("%.2f", $avg) . " bps\n";
+print "N50:                       $n50 bps\n";
+
+# GC content + top contigs
+print "\nSequence parameters\n";
+print "===================\n\n";
+print "Sequence\tlength\tG+C (%)\n";
+
+for (my $i = 0; $i < @seqs && $i < 20; $i++) {
+    my $s = $seqs[$i];
+    my $len = length($s);
+    my $gc = ($s =~ tr/GCgc//);
+    my $gc_pct = $len ? sprintf("%.2f", $gc/$len*100) : 0;
+    print ($i+1) . "\t$len\t$gc_pct\n";
+}
+```
+
+```
+chmod +x contig_stats_full.pl
+```
+
+### try the new contig stats code
+still doesnt work, keep trying...
+
+```
+#test assembly stats on one metaG
+
+perl /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa > /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/Drought_Rhizo_Post_11_final.contigs_STATS_new.txt
+
+```
+
+
+## run contig_stats on all assemblies
+
+```
+#!/bin/bash
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+CONTIG_SCRIPT="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl"
+
+# number of samples to run at once
+MAX_JOBS=5
+
+while read SAMPLE; do
+  (
+    CONTIGS="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/final.contigs.fa"
+    OUTFILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/${SAMPLE}_final.contigs_STATS.txt"
+
+    if [[ -f "$CONTIGS" ]]; then
+      echo "Running contig stats for $SAMPLE"
+
+      perl "$CONTIG_SCRIPT" "$CONTIGS" > "$OUTFILE"
+
+    else
+      echo "Missing contigs file for $SAMPLE" >&2
+    fi
+  ) &
+
+  # limit number of concurrent jobs
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+
+done < "$SAMPLE_LIST"
+
+wait
+```
+
+08_contig_stats_loop.sh
+
+```
+#!/bin/bash
+#SBATCH --job-name=contig_stats_all_samples
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=25 
+#SBATCH --qos=normal
+#SBATCH --time=04:00:00
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/contig_stats_%j.out
+#SBATCH --error=slurm_output/contig_stats_%j.err
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
+
+bash 08_contig_stats_loop.sh
+```
+08_contig_stats.sh
+
+Submitted batch job 25359926
