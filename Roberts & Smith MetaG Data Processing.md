@@ -702,43 +702,47 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
 use strict;
 use warnings;
 
-my $file = shift or die "Usage: contig_stats_full.pl <fasta>\n";
-
+my $file = shift or die "Usage: $0 <fasta>\n";
 open(my $fh, "<", $file) or die "Cannot open $file\n";
 
-my @lengths;
 my @seqs;
+my @headers;
 my $seq = "";
 
+# Read FASTA
 while (<$fh>) {
     chomp;
     if (/^>/) {
         if ($seq ne "") {
             push @seqs, $seq;
-            push @lengths, length($seq);
         }
         $seq = "";
+        push @headers, $_;  # store full header
     } else {
         $seq .= $_;
     }
 }
-# last seq
+# push last sequence
 if ($seq ne "") {
     push @seqs, $seq;
-    push @lengths, length($seq);
 }
 
+close $fh;
+
+# Lengths
+my @lengths = map { length($_) } @seqs;
+
+# Total sequences & bp
 my $total_seqs = scalar(@seqs);
 my $total_bp = 0;
 $total_bp += $_ for @lengths;
+my $avg = $total_seqs ? $total_bp / $total_seqs : 0;
 
-my $avg = $total_bp / $total_seqs;
-
-# N50
-my @sorted = sort { $b <=> $a } @lengths;
+# N50 calculation
+my @sorted_lengths = sort { $b <=> $a } @lengths;
 my $cum = 0;
 my $n50 = 0;
-for my $len (@sorted) {
+for my $len (@sorted_lengths) {
     $cum += $len;
     if ($cum >= $total_bp / 2) {
         $n50 = $len;
@@ -746,23 +750,37 @@ for my $len (@sorted) {
     }
 }
 
-# length bins
+# Length bins
 my %bins = (
-    "0-100" => [0,100],
-    "100-500" => [100,500],
-    "500-1000" => [500,1000],
-    "1000-5000" => [1000,5000],
-    "5000-10000" => [5000,10000],
-    "10000-20000" => [10000,20000],
-    "20000-50000" => [20000,50000],
+    "0-100"        => [0,100],
+    "100-500"      => [100,500],
+    "500-1000"     => [500,1000],
+    "1000-5000"    => [1000,5000],
+    "5000-10000"   => [5000,10000],
+    "10000-20000"  => [10000,20000],
+    "20000-50000"  => [20000,50000],
     "50000-100000" => [50000,100000],
-    "100000-500000" => [100000,500000],
-    "500000+" => [500000,1e12],
+    "100000-500000"=> [100000,500000],
+    "500000+"      => [500000,1e12],
 );
 
+# Ordered bins
+my @bin_order = (
+    "0-100",
+    "100-500",
+    "500-1000",
+    "1000-5000",
+    "5000-10000",
+    "10000-20000",
+    "20000-50000",
+    "50000-100000",
+    "100000-500000",
+    "500000+"
+);
+
+# Count sequences in bins
 my %counts;
 my %bps;
-
 foreach my $len (@lengths) {
     foreach my $bin (keys %bins) {
         my ($min,$max) = @{$bins{$bin}};
@@ -774,11 +792,12 @@ foreach my $len (@lengths) {
     }
 }
 
+# Print length distribution
 print "Length distribution\n";
 print "===================\n\n";
 print "Range\t# contigs (%)\t# bps (%)\n";
 
-foreach my $bin (keys %bins) {
+foreach my $bin (@bin_order) {
     my $c = $counts{$bin} // 0;
     my $b = $bps{$bin} // 0;
     my $c_pct = $total_seqs ? sprintf("%.2f", $c/$total_seqs*100) : 0;
@@ -787,6 +806,7 @@ foreach my $bin (keys %bins) {
     print "$bin:\t$c ($c_pct%)\t$b ($b_pct%)\n";
 }
 
+# General info
 print "\nGeneral Information\n";
 print "==================\n\n";
 print "Total number of sequences: $total_seqs\n";
@@ -794,17 +814,46 @@ print "Total number of bps:       $total_bp\n";
 print "Average sequence length:   " . sprintf("%.2f", $avg) . " bps\n";
 print "N50:                       $n50 bps\n";
 
-# GC content + top contigs
-print "\nSequence parameters\n";
-print "===================\n\n";
-print "Sequence\tlength\tG+C (%)\n";
-
-for (my $i = 0; $i < @seqs && $i < 20; $i++) {
+# Build contig objects
+my @contigs;
+for (my $i = 0; $i < @seqs; $i++) {
     my $s = $seqs[$i];
     my $len = length($s);
-    my $gc = ($s =~ tr/GCgc//);
-    my $gc_pct = $len ? sprintf("%.2f", $gc/$len*100) : 0;
-    print ($i+1) . "\t$len\t$gc_pct\n";
+
+    push @contigs, {
+        header => $headers[$i],
+        seq    => $s,
+        len    => $len,
+        gc     => ($s =~ tr/GCgc//),
+        nonN   => ($s =~ tr/ACGTacgt//)
+    };
+}
+
+# Sort by length descending
+@contigs = sort { $b->{len} <=> $a->{len} } @contigs;
+
+# Print sequence parameters
+print "\nSequence parameters\n";
+print "===================\n\n";
+print "Sequence\tlength\tG+C\tNon-Ns\tdescription\n";
+
+for (my $i = 0; $i < @contigs; $i++) {
+
+    my $c = $contigs[$i];
+    my $header = $c->{header};
+
+    # Extract ONLY contig ID (k121_xxx)
+    my ($id) = $header =~ /^>(\S+)/;
+    $id = ">$id";
+
+    # Full description (no >)
+    my $desc = $header =~ s/^>//r;
+
+    my $len = $c->{len};
+    my $gc_pct = $len ? sprintf("%.2f", $c->{gc}/$len*100) : 0;
+    my $nonN_pct = $len ? sprintf("%.2f", $c->{nonN}/$len*100) : 0;
+
+    print $i+1, "\t", $id, "\t", $len, "\t", $gc_pct, "\t", $nonN_pct, "\t", $desc, "\n";
 }
 ```
 
@@ -813,7 +862,6 @@ chmod +x contig_stats_full.pl
 ```
 
 ### try the new contig stats code
-still doesnt work, keep trying...
 
 ```
 #test assembly stats on one metaG
