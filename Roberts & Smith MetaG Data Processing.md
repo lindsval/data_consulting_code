@@ -444,7 +444,7 @@ multiqc \
 
 file:///Users/valerielindstrom/Downloads/trimmed_multiqc_report%20(1).html 
 
-# zip or delete raw reads
+### zip or delete raw reads
 At this point, we will only proceed with the trimmed reads. As such, let's either zip the raw reads to save space or delete them from the working directory.
 
 ```
@@ -1054,7 +1054,685 @@ bash 08a_combine_stats.sh
 
 ## Run Co-Assmebly
 
-```
-# concatenate the files 
+#### We will coassemble by treatment and soil type (rhizo versus bulik): 
+- DroughtRhizo (n=10; so this includes the pre and post plots)
+- DroughtBulk (n=10)
+- DelugeRhizo (n=10)
+- DelugeBulk (n=10)
+- ControlRhizo (n=10)
+- ControlBulk (n=10)
+- DroughtDelugeRhizo (n=10)
+- DroughtDeligeBulk (n=10)
+- Control (n=8)
 
 ```
+#make a new directory for coassembly
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
+
+mkdir coassembly
+cd coassembly
+
+#make subdirectories for each coassembly
+mkdir DroughtRhizo
+mkdir DroughtBulk
+mkdir DelugeRhizo
+mkdir DelugeBulk
+mkdir ControlRhizo
+mkdir ControlBulk
+mkdir DroughtDelugeRhizo
+mkdir DroughtDelugeBulk
+mkdir Control
+```
+
+#### Create a sample list the the coassembly 
+```
+nano coA_sample_list.txt
+
+#paste in the list
+DroughtRhizo
+DroughtBulk
+DelugeRhizo
+DelugeBulk
+ControlRhizo
+ControlBulk
+DroughtDelugeRhizo
+DroughtDelugeBulk
+Control
+```
+### Create subdirectories
+- concat_reads
+- assembly
+```
+for d in */; do  
+mkdir -p "${d}concat_reads"  
+done
+
+for d in */; do  
+mkdir -p "${d}assembly"  
+done
+
+```
+
+## Combine the bbduk trimmed reads into r1 and r2 for each treatment
+##### ControlBulk
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/ControlBulk/concat_reads"
+samples=(
+Control_BulkSoil_Post_10
+Control_BulkSoil_Post_24
+Control_BulkSoil_Post_27
+Control_BulkSoil_Post_38
+Control_BulkSoil_Post_6
+Control_BulkSoil_Pre_10
+Control_BulkSoil_Pre_24
+Control_BulkSoil_Pre_27
+Control_BulkSoil_Pre_38
+Control_BulkSoil_Pre_6
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/ControlBulk_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/ControlBulk_R2_test.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09a_concat_reads_for_coA_ControlBulk.sh
+
+##### ControlRhizo
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/ControlRhizo/concat_reads"
+samples=(
+Control_Rhizo_Post_10
+Control_Rhizo_Post_24
+Control_Rhizo_Post_27
+Control_Rhizo_Post_38
+Control_Rhizo_Post_6
+Control_Rhizo_Pre_10
+Control_Rhizo_Pre_24
+Control_Rhizo_Pre_27
+Control_Rhizo_Pre_38
+Control_Rhizo_Pre_6
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/ControlRhizo_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/ControlRhizo_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09b_concat_reads_for_CoA_ControlRhizo.sh
+
+
+##### Controls
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/Control/concat_reads"
+samples=(
+Control1_Control_Pre_NA
+Control2_Control_Pre_NA
+Control3_Control_Pre_NA
+Control4_Control_Pre_NA
+Control5_Control_Post_NA
+Control6_Control_Post_NA
+Control7_Control_Post_NA
+Control8_Control_Post_NA
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/Control_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/Control_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09c_concat_reads_for_CoA_Control.sh
+
+##### DelugeBulk
+
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DelugeBulk/concat_reads"
+samples=(
+Deluge_BulkSoil_Post_23
+Deluge_BulkSoil_Post_28
+Deluge_BulkSoil_Post_37
+Deluge_BulkSoil_Post_5
+Deluge_BulkSoil_Post_9
+Deluge_BulkSoil_Pre_23
+Deluge_BulkSoil_Pre_28
+Deluge_BulkSoil_Pre_37
+Deluge_BulkSoil_Pre_5
+Deluge_BulkSoil_Pre_9
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DelugeBulk_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DelugeBulk_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09d_concat_reads_for_CoA_DelugeBulk.sh
+
+##### DelugeRhizo
+
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DelugeRhizo/concat_reads"
+samples=(
+Deluge_Rhizo_Post_23
+Deluge_Rhizo_Post_28
+Deluge_Rhizo_Post_37
+Deluge_Rhizo_Post_5
+Deluge_Rhizo_Post_9
+Deluge_Rhizo_Pre_23
+Deluge_Rhizo_Pre_28
+Deluge_Rhizo_Pre_37
+Deluge_Rhizo_Pre_5
+Deluge_Rhizo_Pre_9
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DelugeRhizo_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DelugeRhizo_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09e_concat_reads_for_CoA_DelugeRhizo.sh
+
+##### DroughtBulk
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DroughtBulk/concat_reads"
+samples=(
+Drought_BulkSoil_Post_11
+Drought_BulkSoil_Post_21
+Drought_BulkSoil_Post_25
+Drought_BulkSoil_Post_40
+Drought_BulkSoil_Post_7
+Drought_BulkSoil_Pre_11
+Drought_BulkSoil_Pre_21
+Drought_BulkSoil_Pre_25
+Drought_BulkSoil_Pre_40
+Drought_BulkSoil_Pre_7
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtBulk_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtBulk_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09f_concat_reads_for_CoA_DroughtBulk.sh
+
+##### DroughtRhizo
+
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DroughtRhizo/concat_reads"
+samples=(
+Drought_Rhizo_Post_11
+Drought_Rhizo_Post_21
+Drought_Rhizo_Post_25
+Drought_Rhizo_Post_40
+Drought_Rhizo_Post_7
+Drought_Rhizo_Pre_11
+Drought_Rhizo_Pre_21
+Drought_Rhizo_Pre_25
+Drought_Rhizo_Pre_40
+Drought_Rhizo_Pre_7
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtRhizo_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtRhizo_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09g_concat_reads_for_CoA_DroughtRhizo.sh
+
+##### DroughtDelugeBulk
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DroughtDelugeBulk/concat_reads"
+samples=(
+DroughtDeluge_BulkSoil_Post_12
+DroughtDeluge_BulkSoil_Post_22
+DroughtDeluge_BulkSoil_Post_26
+DroughtDeluge_BulkSoil_Post_39
+DroughtDeluge_BulkSoil_Post_8
+DroughtDeluge_BulkSoil_Pre_12
+DroughtDeluge_BulkSoil_Pre_22
+DroughtDeluge_BulkSoil_Pre_26
+DroughtDeluge_BulkSoil_Pre_39
+DroughtDeluge_BulkSoil_Pre_8
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtDelugeBulk_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtDelugeBulk_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+bash 09h_concat_reads_for_CoA_DroughtDelugeBulk.sh
+
+##### DroughtDelugeRhizo
+
+```
+#!/bin/bash
+
+# output directory
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/DroughtDelugeRhizo/concat_reads"
+samples=(
+DroughtDeluge_Rhizo_Post_12
+DroughtDeluge_Rhizo_Post_22
+DroughtDeluge_Rhizo_Post_26
+DroughtDeluge_Rhizo_Post_39
+DroughtDeluge_Rhizo_Post_8
+DroughtDeluge_Rhizo_Pre_12
+DroughtDeluge_Rhizo_Pre_22
+DroughtDeluge_Rhizo_Pre_26
+DroughtDeluge_Rhizo_Pre_39
+DroughtDeluge_Rhizo_Pre_8
+)
+
+BASEDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+# concatenate all R1 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R1_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtDelugeRhizo_R1.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+
+# concatenate all R2 reads
+for sample in "${samples[@]}"; do
+    infile="$BASEDIR/$sample/processed_reads/${sample}_R2_bbduktrimmed.fastq"
+    outfile="$OUTDIR/DroughtDelugeRhizo_R2.fastq"
+
+    if [[ -f "$infile" ]]; then
+        cat "$infile" >> "$outfile"
+    else
+        echo "Missing: $infile"
+    fi
+done
+```
+
+bash 09i_concat_reads_for_CoA_DroughtDelugeRhizo.sh
+
+### Check file sizes after concatenation - looks good
+```
+#check file sizes and make sure they make sense (should be around like 100GB each)
+
+while IFS= read -r sample; do  
+echo "=== $sample ==="  
+  
+dir="$sample/concat_reads"  
+  
+if [[ -d "$dir" ]]; then  
+for f in "$dir"/*; do  
+[[ -f "$f" ]] || continue  
+printf "%s %s\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)"  
+done  
+else  
+echo "Missing directory: $dir"  
+fi  
+  
+echo  
+done < coA_sample_list.txt
+
+##OUTPUT
+=== DroughtRhizo ===
+DroughtRhizo_R1.fastq 91G
+DroughtRhizo_R2.fastq 90G
+=== DroughtBulk ===
+DroughtBulk_R1.fastq 86G
+DroughtBulk_R2.fastq 85G
+=== DelugeRhizo ===
+DelugeRhizo_R1.fastq 90G
+DelugeRhizo_R2.fastq 88G
+=== DelugeBulk ===
+DelugeBulk_R1.fastq 93G
+DelugeBulk_R2.fastq 92G
+=== ControlRhizo ===
+ControlRhizo_R1.fastq 89G
+ControlRhizo_R2.fastq 88G
+=== ControlBulk ===
+ControlBulk_R1.fastq 102G
+ControlBulk_R2_test.fastq 101G
+=== DroughtDelugeRhizo ===
+DroughtDelugeRhizo_R1.fastq 100G
+DroughtDelugeRhizo_R2.fastq 98G
+=== DroughtDelugeBulk ===
+DroughtDelugeBulk_R1.fastq 89G
+DroughtDelugeBulk_R2.fastq 88G
+=== Control ===
+Control_R1.fastq 111M
+Control_R2.fastq 110M
+```
+
+### Run CoAssembly
+
+```
+#!/bin/bash
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+# number of samples to run at once
+MAX_JOBS=6
+
+while read SAMPLE; do
+  (
+    R1="${BASE_DIR}/${SAMPLE}/concat_reads/${SAMPLE}_R1.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/concat_reads/${SAMPLE}_R2.fastq"
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+
+    # check files exist
+    if [[ -f "$R1" && -f "$R2" ]]; then
+      echo "Running MEGAHIT for $SAMPLE"
+
+      megahit \
+        -1 "$R1" \
+        -2 "$R2" \
+        --k-min 31 --k-max 121 --k-step 10 \
+        -m 0.4 \
+        -t 10 \
+        -o "$OUTDIR"
+
+    else
+      echo "Missing reads for $SAMPLE" >&2
+    fi
+  ) &
+
+  # limit number of concurrent jobs
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+
+done < "$SAMPLE_LIST"
+
+wait
+```
+10_megahit_coassembly_loop.sh
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=megahit_coAssembly
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=65
+#SBATCH --partition=amem
+#SBATCH --qos=mem
+#SBATCH --time=168:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahitcoAssembly%j.out
+#SBATCH --error=slurm_output/megahit_coAssembly%j.err
+
+
+module load anaconda
+conda activate megahit
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
+
+bash 10_megahit_coassembly_loop.sh 
+```
+10_megahit_coassembly.sh
+i submitted this tuesday afternoon, and its on PD, so i think it should start once the amem partitions are back online.
+
+## Coassembly stats
+
+```
+check that all coassemblies ran
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null &&((count++))  
+done < coA_sample_list.txt  
+  
+echo $count
+```
+
+### Run stats
+
+```
+#!/bin/bash
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+CONTIG_SCRIPT="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl"
+
+# number of samples to run at once
+MAX_JOBS=5
+
+while read SAMPLE; do
+  (
+    CONTIGS="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/final.contigs.fa"
+    OUTFILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/${SAMPLE}_final.contigs_STATS.txt"
+
+    if [[ -f "$CONTIGS" ]]; then
+      echo "Running contig stats for $SAMPLE"
+
+      perl "$CONTIG_SCRIPT" "$CONTIGS" > "$OUTFILE"
+
+    else
+      echo "Missing contigs file for $SAMPLE" >&2
+    fi
+  ) &
+
+  # limit number of concurrent jobs
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+
+done < "$SAMPLE_LIST"
+
+wait
+```
+
+11_contig_stats_CoAssembly_loop.sh
+
+```
+#!/bin/bash
+#SBATCH --job-name=contig_stats_coAssembly
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=25 
+#SBATCH --qos=normal
+#SBATCH --time=04:00:00
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/contig_stats_coAssembly%j.out
+#SBATCH --error=slurm_output/contig_stats_coAssembly%j.err
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
+
+bash 11_contig_stats_CoAssembly_loop.sh
+```
+11_contig_stats_coAssembly.sh

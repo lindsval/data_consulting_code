@@ -536,3 +536,32 @@ echo "Done! Output written to: $OUTFILE"
 bash 08a_combine_stats.sh
 
 ## Step 5: Run Co-Assembly
+#### We will coassemble by treatment and soil type (rhizo versus bulik): 
+- DroughtRhizo (n=10; so this includes the pre and post plots)
+- DroughtBulk (n=10)
+- DelugeRhizo (n=10)
+- DelugeBulk (n=10)
+- ControlRhizo (n=10)
+- ControlBulk (n=10)
+- DroughtDelugeRhizo (n=10)
+- DroughtDeligeBulk (n=10)
+- Control (n=8)
+
+```
+#make a new directory for coassembly
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
+
+mkdir coassembly
+cd coassembly
+
+#make subdirectories for each coassembly
+mkdir DroughtRhizo
+mkdir DroughtBulk
+mkdir DelugeRhizo
+mkdir DelugeBulk
+mkdir ControlRhizo
+mkdir ControlBulk
+mkdir DroughtDelugeRhizo
+mkdir DroughtDeligeBulk
+mkdir Control
+```
