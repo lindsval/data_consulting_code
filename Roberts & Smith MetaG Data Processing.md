@@ -1736,3 +1736,110 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
 bash 11_contig_stats_CoAssembly_loop.sh
 ```
 11_contig_stats_coAssembly.sh
+
+
+
+## Compile pullseqs
+
+```
+git clone https://github.com/bcthomas/pullseq.git
+cd pullseq
+mkdir build
+cd build
+
+module load cmake #version cmake version 4.2.3
+cmake ..  
+make
+
+# This will build binaries in build/src/
+  > build/src/pullseq
+  > build/src/seqdiff
+
+#check its there using help page
+./src/pullseq -h
+
+#pullseq - a bioinformatics tool for manipulating fasta and fastq filesVersion: #1.0.2 Name lookup method: UTHASH(Written by bct - copyright 2012-2015)
+# ....
+
+
+#good!
+```
+
+# extract contigs >2.5kb using pullseqs
+
+```
+#!/bin/bash
+#SBATCH --job-name=pullseq_filter_indiv_assembly
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --time=23:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/pullseqs%j.out
+#SBATCH --error=slurm_output/pullseqs%j.err
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read SAMPLE; do
+
+  OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+  INPUT="${OUTDIR}/final.contigs.fa"
+  OUTPUT="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+
+  echo "Processing sample: $SAMPLE"
+
+  if [ -f "$INPUT" ]; then
+    pullseq -i "$INPUT" -m 2500 > "$OUTPUT"
+    echo " Output written to: $OUTPUT"
+  else
+    echo " WARNING: $INPUT not found, skipping"
+  fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples processed."
+```
+
+### Pullseqs for coassembly
+```
+#!/bin/bash
+#SBATCH --job-name=pullseq_filter_Coassembly
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --time=23:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/pullseqs_CoA%j.out
+#SBATCH --error=slurm_output/pullseqs_CoA%j.err
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassemblky/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read SAMPLE; do
+
+  OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+  INPUT="${OUTDIR}/final.contigs.fa"
+  OUTPUT="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+
+  echo "Processing sample: $SAMPLE"
+
+  if [ -f "$INPUT" ]; then
+    pullseq -i "$INPUT" -m 2500 > "$OUTPUT"
+    echo " Output written to: $OUTPUT"
+  else
+    echo " WARNING: $INPUT not found, skipping"
+  fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples processed."
+```
+
+## Finish binning pre-processing (bbmap...etc)
