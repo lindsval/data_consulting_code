@@ -168,29 +168,6 @@ compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null &&((cou
 done < sample_list.txt  
   
 echo $count
-#83.....
-
-while read sample; do  
-if ! compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null; then  
-echo "$sample"  
-fi  
-done < sample_list.txt
-
-#these samples did not get assembled. 
-Control_BulkSoil_Post_6
-Control_Rhizo_Post_6
-Drought_BulkSoil_Post_7
-Drought_Rhizo_Post_7
-DroughtDeluge_BulkSoil_Post_8
-
-#why...these were the 5 that were in the middle of assembly when the first assembly job timed out... confirmed in the megahit_25178897.out file. 
-
-#delete the megahit dirs
-rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Control_BulkSoil_Post_6/assembly/megahit_out  
-rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Control_Rhizo_Post_6/assembly/megahit_out  
-rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Drought_BulkSoil_Post_7/assembly/megahit_out  
-rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//Drought_Rhizo_Post_7/assembly/megahit_out  
-rm -rf /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG//DroughtDeluge_BulkSoil_Post_8/assembly/megahit_out
 
 ```
 
@@ -360,16 +337,6 @@ for (my $i = 0; $i < @contigs; $i++) {
 chmod +x contig_stats_full.pl
 ```
 
-### try the new contig stats code - works!
-
-```
-#test assembly stats on one metaG
-
-perl /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa > /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/Drought_Rhizo_Post_11_final.contigs_STATS_new.txt
-
-```
-
-
 ## Step 3b: run contig_stats on all assemblies
 
 ```
@@ -450,7 +417,7 @@ echo $count
 
 
 ## Step 4: Combine all contig stats files
-
+Copy this into a new .sh file and then run it 
 ```
 #!/bin/bash
 
