@@ -1,5 +1,6 @@
 Part 2: Zip data, assembly, binning
-	** these training docs are just modified (for simplicity) from the data analysis script "Roberts & Smith MetaG Data Processing"
+
+these training docs are just modified (for simplicity) from the data analysis script "Roberts & Smith MetaG Data Processing"
 
 Training Doc: https://docs.google.com/presentation/d/1hXJD7P0WjOE-iaKu9HhdtIVDVLCY8hIjD71KNBJ04WY/edit?slide=id.g3cd05613a6c_0_62#slide=id.g3cd05613a6c_0_62
 
