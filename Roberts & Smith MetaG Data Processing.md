@@ -575,7 +575,7 @@ bash 07_megahit_individual_assembly_loop.sh
 07_megahit_individual_assembly.sh
 Submitted batch job 25224839
 
-
+### Check all samples assembled
 ```
 #check they were all run
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
@@ -680,23 +680,7 @@ wait
 ```
 Submitted batch job 25281224
 
-
-
-
-```
-#test assembly stats on one metaG
-cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
-
-/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats.pl \
-/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/megahit_out_testing_on_Drought_Rhizo_Post_11/final.contigs.fa \
-> Drought_Rhizo_Post_11_final.contigs_STATS.txt
-
-
-#this produces a very limited stats summary, can we get a better summary?
-```
-
-
-### contigs stats, save this in a new directory called custom_scripts
+### contigs stats .pl file, save this in a new directory called custom_scripts
 ```
 #!/usr/bin/env perl
 use strict;
@@ -861,7 +845,7 @@ for (my $i = 0; $i < @contigs; $i++) {
 chmod +x contig_stats_full.pl
 ```
 
-### try the new contig stats code
+### try the new contig stats code - works!
 
 ```
 #test assembly stats on one metaG
@@ -932,3 +916,145 @@ bash 08_contig_stats_loop.sh
 08_contig_stats.sh
 
 Submitted batch job 25359926
+
+### Check this ran for all samples
+
+```
+#check 
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/assembly/megahit_out/*_final.contigs_STATS.txt" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+#good!
+```
+
+
+### Combine all contig stats files
+
+```
+#!/bin/bash
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+SAMPLE_LIST="${BASE_DIR}/sample_list.txt"
+OUTFILE="${BASE_DIR}/all_samples_contig_stats_summary.txt"
+
+# write header
+echo -e "Sample\
+\t0-100_reads\t0-100_reads_pct\t0-100_bps\t0-100_bps_pct\
+\t100-500_reads\t100-500_reads_pct\t100-500_bps\t100-500_bps_pct\
+\t500-1000_reads\t500-1000_reads_pct\t500-1000_bps\t500-1000_bps_pct\
+\t1000-5000_reads\t1000-5000_reads_pct\t1000-5000_bps\t1000-5000_bps_pct\
+\t5000-10000_reads\t5000-10000_reads_pct\t5000-10000_bps\t5000-10000_bps_pct\
+\t10000-20000_reads\t10000-20000_reads_pct\t10000-20000_bps\t10000-20000_bps_pct\
+\t20000-50000_reads\t20000-50000_reads_pct\t20000-50000_bps\t20000-50000_bps_pct\
+\t50000-100000_reads\t50000-100000_reads_pct\t50000-100000_bps\t50000-100000_bps_pct\
+\t100000-500000_reads\t100000-500000_reads_pct\t100000-500000_bps\t100000-500000_bps_pct\
+\t500000+_reads\t500000+_reads_pct\t500000+_bps\t500000+_bps_pct\
+\tTotal_sequences\tTotal_bps\tAvg_length\tN50" > "$OUTFILE"
+
+
+while read SAMPLE; do
+
+  FILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/${SAMPLE}_final.contigs_STATS.txt"
+
+  if [[ ! -f "$FILE" ]]; then
+    echo "Missing stats for $SAMPLE" >&2
+    continue
+  fi
+
+  awk -v sample="$SAMPLE" '
+  BEGIN { OFS="\t" }
+
+  /Length distribution/ {in_dist=1; next}
+  /General Information/ {in_dist=0; in_gen=1; next}
+
+  # parse distribution lines (robust to whitespace + formatting)
+  in_dist && /^[[:space:]]*[0-9]/ {
+
+    # extract range (e.g., 0-100, 100-500, etc.)
+    if (match($0, /([0-9]+-[0-9]+|\+):/, m)) {
+      range=m[1]
+      gsub(":", "", range)
+    } else {
+      next
+    }
+
+    # first match = reads + %
+    if (match($0, /([0-9]+)[[:space:]]+\(([0-9.]+)%\)/, r)) {
+      reads=r[1]
+      reads_pct=r[2]
+    } else {
+      reads="NA"; reads_pct="NA"
+    }
+
+    # second match = bps + %
+    rest=substr($0, RSTART + RLENGTH)
+    if (match(rest, /([0-9]+)[[:space:]]+\(([0-9.]+)%\)/, b)) {
+      bps=b[1]
+      bps_pct=b[2]
+    } else {
+      bps="NA"; bps_pct="NA"
+    }
+
+    data[range]=reads"\t"reads_pct"\t"bps"\t"bps_pct
+  }
+
+  # general info
+  in_gen && /Total number of sequences/ {
+    total_seq=$5
+  }
+  in_gen && /Total number of bps/ {
+    total_bps=$5
+  }
+  in_gen && /Average sequence length/ {
+    avg_len=$4
+  }
+  in_gen && /^N50/ {
+    n50=$2
+  }
+
+  END {
+    printf sample
+
+    ordered_ranges[1]="0-100"
+    ordered_ranges[2]="100-500"
+    ordered_ranges[3]="500-1000"
+    ordered_ranges[4]="1000-5000"
+    ordered_ranges[5]="5000-10000"
+    ordered_ranges[6]="10000-20000"
+    ordered_ranges[7]="20000-50000"
+    ordered_ranges[8]="50000-100000"
+    ordered_ranges[9]="100000-500000"
+    ordered_ranges[10]="500000+"
+
+    for (i=1; i<=10; i++) {
+      range_key = ordered_ranges[i]
+      if (range_key in data) {
+        printf "\t%s", data[range_key]
+      } else {
+        printf "\tNA\tNA\tNA\tNA"
+      }
+    }
+
+    printf "\t%s\t%s\t%s\t%s\n", total_seq, total_bps, avg_len, n50
+  }
+
+  ' "$FILE" >> "$OUTFILE"
+
+done < "$SAMPLE_LIST"
+
+echo "Done! Output written to: $OUTFILE"
+```
+bash 08a_combine_stats.sh
+
+## Run Co-Assmebly
+
+```
+# concatenate the files 
+
+```
