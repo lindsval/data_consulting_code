@@ -1940,7 +1940,7 @@ echo "All samples processed."
 
 ```
 sbatch 13_bbmap_coA.sh
-Submitted batch job 27469328 (mine is still running, this will take a while....
+Submitted batch job 27469328 (took about 4 hours)
 ## CoAssembly mapping
 
 ```
@@ -2000,12 +2000,12 @@ sbatch 13_bbmap_coA.sh
 Submitted batch job 27469284 (mine is still running, this will take a while....)
 
 
-### Convert SAM to BAM files, sort, filter
+## Convert SAM to BAM files, sort, filter
 
 ```
 
 #!/bin/bash  
-#SBATCH --job-name=samtools_indiv_sort  
+#SBATCH --job-name=indiv_sort  
 #SBATCH --nodes=1  
 #SBATCH --cpus-per-task=20  
 #SBATCH --time=04:00:00  
@@ -2014,8 +2014,8 @@ Submitted batch job 27469284 (mine is still running, this will take a while....)
 #SBATCH --partition=amilan  
 #SBATCH --mail-type=ALL  
 #SBATCH --mail-user=lindsval@colostate.edu  
-#SBATCH --output=slurm_output/samtools_indiv_%j.out  
-#SBATCH --error=slurm_output/samtools_indiv_%j.err  
+#SBATCH --output=slurm_output/indiv_sort%j.out  
+#SBATCH --error=slurm_output/indiv_sort%j.err  
   
 module load samtools  
   
@@ -2051,3 +2051,248 @@ echo "All samples complete."
 
 ```
 
+14_sort_indiv_assembly.sh
+Submitted batch job 27475573
+
+```
+#!/bin/bash  
+#SBATCH --job-name=coA_sort  
+#SBATCH --nodes=1  
+#SBATCH --cpus-per-task=20  
+#SBATCH --time=04:00:00  
+#SBATCH --mem=20gb  
+#SBATCH --qos=normal  
+#SBATCH --partition=amilan  
+#SBATCH --mail-type=ALL  
+#SBATCH --mail-user=lindsval@colostate.edu  
+#SBATCH --output=slurm_output/coA_sort%j.out  
+#SBATCH --error=slurm_output/coA_sort%j.err  
+  
+module load samtools  
+  
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"  
+  
+while read SAMPLE; do
+
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+
+    if [[ -f "$OUTPUT" ]]; then
+
+        samtools view -@ 20 -bS "$OUTPUT" \
+            > "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.bam"
+
+        samtools sort -@ 20 \
+            -T "${MAPPED_DIR}/${SAMPLE}_tmp_sort" \
+            -o "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sorted.bam" \
+            "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.bam"
+
+        echo "Finished: $SAMPLE"
+
+    else
+        echo "Missing SAM file: $OUTPUT"
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
+```
+14_sort_CoAssembly.sh
+SUBMIT THIS NEXT ^^^^
+
+
+
+## Reformat individual assembly files
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=indiv_reformat
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=04:00:00
+#SBATCH --mem=120gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_reformat%j.out
+#SBATCH --error=slurm_output/indiv_reformat%j.err
+
+module load bbtools
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read SAMPLE; do
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    INPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sorted.bam"
+OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$INPUT_BAM" ]]; then
+        reformat.sh \
+            -Xmx100g \
+            threads=20 \
+            idfilter=0.99 \
+            in="$INPUT_BAM" \
+            out="$OUTPUT_BAM" \
+            pairedonly=t \
+            primaryonly=t
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing BAM file: $INPUT_BAM"
+    fi
+done < "$SAMPLE_LIST"
+echo "All samples complete."
+
+```
+15_reformat_indiv.sh
+## Reformat coassembly files
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=coA_reformat
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=04:00:00
+#SBATCH --mem=120gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coA_reformat%j.out
+#SBATCH --error=slurm_output/coA_reformat%j.err
+
+module load bbtools
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read SAMPLE; do
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    INPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sorted.bam"
+OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$INPUT_BAM" ]]; then
+        reformat.sh \
+            -Xmx100g \
+            threads=20 \
+            idfilter=0.99 \
+            in="$INPUT_BAM" \
+            out="$OUTPUT_BAM" \
+            pairedonly=t \
+            primaryonly=t
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing BAM file: $INPUT_BAM"
+    fi
+done < "$SAMPLE_LIST"
+echo "All samples complete."
+
+```
+15_reformat_coA.sh
+## Binning with Metabat (v. 2:2.18)
+
+### Install metabat
+
+```
+acompile --ntasks=4 
+module load anaconda
+conda config --set channel_priority strict
+conda create -n metabat2 \
+    -c conda-forge \
+    -c bioconda \
+    boost-cpp=1.85 \
+    boost=1.85 \
+    metabat2
+conda activate metabat2
+
+```
+
+
+## Co assembly binning
+```
+#!/bin/bash
+#SBATCH --job-name=coA_metabat
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=250gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coA_metabat%j.out
+#SBATCH --error=slurm_output/coA_metabat%j.err
+
+module load anaconda
+conda activate metabat2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read SAMPLE; do
+    SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+    ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
+    CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
+    BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$CONTIGS" && -f "$BAM" ]]; then
+        cd "$ASSEMBLY_DIR"
+        runMetaBat.sh "$CONTIGS" "$BAM"
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing files for: $SAMPLE"
+        echo "Contigs: $CONTIGS"
+        echo "BAM: $BAM"
+    fi
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
+```
+
+## Individual assembly binning
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_metabat_bin
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=250gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coA_metabat%j.out
+#SBATCH --error=slurm_output/coA_metabat%j.err
+
+module load anaconda
+conda activate metabat2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read SAMPLE; do
+    SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+    ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
+    CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
+    BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$CONTIGS" && -f "$BAM" ]]; then
+        cd "$ASSEMBLY_DIR"
+        runMetaBat.sh "$CONTIGS" "$BAM"
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing files for: $SAMPLE"
+        echo "Contigs: $CONTIGS"
+        echo "BAM: $BAM"
+    fi
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
