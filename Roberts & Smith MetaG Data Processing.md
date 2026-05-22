@@ -1688,7 +1688,7 @@ BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
 CONTIG_SCRIPT="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl"
 
 # number of samples to run at once
-MAX_JOBS=5
+MAX_JOBS=1
 
 while read SAMPLE; do
   (
@@ -1722,7 +1722,8 @@ wait
 #SBATCH --job-name=contig_stats_coAssembly
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=25 
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=80gb 
 #SBATCH --qos=normal
 #SBATCH --time=04:00:00
 #SBATCH --partition=amilan
@@ -1737,9 +1738,9 @@ bash 11_contig_stats_CoAssembly_loop.sh
 ```
 11_contig_stats_coAssembly.sh
 
-Submitted batch job 27468806 (may 22 1015a)
+Submitted batch job 27469417 
 
-## Compile pullseqs
+### Compile pullseqs
 
 ```
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts
@@ -1767,7 +1768,7 @@ make
 #good!
 ```
 
-# extract contigs >2.5kb using pullseqs
+## extract contigs >2.5kb using pullseqs
 
 ### pullseqs for individual assembly 
 
@@ -1854,7 +1855,7 @@ echo "All samples processed."
 
 Submitted batch job 27469069
 
-## Install bbmap (version xz)
+## Install bbmap (version 39.81)
 
 ```
 acompile --ntasks=4 
@@ -1939,7 +1940,7 @@ echo "All samples processed."
 
 ```
 sbatch 13_bbmap_coA.sh
-Submitted batch job 27469328
+Submitted batch job 27469328 (mine is still running, this will take a while....
 ## CoAssembly mapping
 
 ```
@@ -1996,8 +1997,57 @@ echo "All samples processed."
 
 ```
 sbatch 13_bbmap_coA.sh
-Submitted batch job 27469284
+Submitted batch job 27469284 (mine is still running, this will take a while....)
 
 
 ### Convert SAM to BAM files, sort, filter
+
+```
+
+#!/bin/bash  
+#SBATCH --job-name=samtools_indiv_sort  
+#SBATCH --nodes=1  
+#SBATCH --cpus-per-task=20  
+#SBATCH --time=04:00:00  
+#SBATCH --mem=20gb  
+#SBATCH --qos=normal  
+#SBATCH --partition=amilan  
+#SBATCH --mail-type=ALL  
+#SBATCH --mail-user=lindsval@colostate.edu  
+#SBATCH --output=slurm_output/samtools_indiv_%j.out  
+#SBATCH --error=slurm_output/samtools_indiv_%j.err  
+  
+module load samtools  
+  
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"  
+  
+while read SAMPLE; do
+
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+
+    if [[ -f "$OUTPUT" ]]; then
+
+        samtools view -@ 20 -bS "$OUTPUT" \
+            > "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.bam"
+
+        samtools sort -@ 20 \
+            -T "${MAPPED_DIR}/${SAMPLE}_tmp_sort" \
+            -o "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sorted.bam" \
+            "${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.bam"
+
+        echo "Finished: $SAMPLE"
+
+    else
+        echo "Missing SAM file: $OUTPUT"
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
+
+```
 
