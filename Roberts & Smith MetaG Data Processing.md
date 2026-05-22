@@ -1661,7 +1661,7 @@ bash 10_megahit_coassembly_loop.sh
 ```
 10_megahit_coassembly.sh
 i submitted this tuesday afternoon, and its on PD, so i think it should start once the amem partitions are back online.
-
+all good here.
 ## Coassembly stats
 
 ```
@@ -1674,7 +1674,7 @@ while read sample; do
 compgen -G "${sample}/assembly/megahit_out/final.contigs.fa" > /dev/null &&((count++))  
 done < coA_sample_list.txt  
   
-echo $count
+echo $count #9, so were good!
 ```
 
 ### Run stats
@@ -1737,11 +1737,13 @@ bash 11_contig_stats_CoAssembly_loop.sh
 ```
 11_contig_stats_coAssembly.sh
 
-
+Submitted batch job 27468806 (may 22 1015a)
 
 ## Compile pullseqs
 
 ```
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts
+
 git clone https://github.com/bcthomas/pullseq.git
 cd pullseq
 mkdir build
@@ -1767,6 +1769,8 @@ make
 
 # extract contigs >2.5kb using pullseqs
 
+### pullseqs for individual assembly 
+
 ```
 #!/bin/bash
 #SBATCH --job-name=pullseq_filter_indiv_assembly
@@ -1783,6 +1787,7 @@ make
 
 SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+PULLSEQ="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/pullseq/build/src/pullseq"
 
 while read SAMPLE; do
 
@@ -1793,7 +1798,7 @@ while read SAMPLE; do
   echo "Processing sample: $SAMPLE"
 
   if [ -f "$INPUT" ]; then
-    pullseq -i "$INPUT" -m 2500 > "$OUTPUT"
+    "$PULLSEQ" -i "$INPUT" -m 2500 > "$OUTPUT"
     echo " Output written to: $OUTPUT"
   else
     echo " WARNING: $INPUT not found, skipping"
@@ -1803,6 +1808,9 @@ done < "$SAMPLE_LIST"
 
 echo "All samples processed."
 ```
+12_pullseqs_2500_individual_assembly.sh
+
+Submitted batch job 27468972
 
 ### Pullseqs for coassembly
 ```
@@ -1819,8 +1827,9 @@ echo "All samples processed."
 #SBATCH --output=slurm_output/pullseqs_CoA%j.out
 #SBATCH --error=slurm_output/pullseqs_CoA%j.err
 
-SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassemblky/coA_sample_list.txt"
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+PULLSEQ="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/pullseq/build/src/pullseq"
 
 while read SAMPLE; do
 
@@ -1831,7 +1840,7 @@ while read SAMPLE; do
   echo "Processing sample: $SAMPLE"
 
   if [ -f "$INPUT" ]; then
-    pullseq -i "$INPUT" -m 2500 > "$OUTPUT"
+    "$PULLSEQ" -i "$INPUT" -m 2500 > "$OUTPUT"
     echo " Output written to: $OUTPUT"
   else
     echo " WARNING: $INPUT not found, skipping"
@@ -1841,5 +1850,154 @@ done < "$SAMPLE_LIST"
 
 echo "All samples processed."
 ```
+12_pullseqs_2500_CoAssembly.sh
 
-## Finish binning pre-processing (bbmap...etc)
+Submitted batch job 27469069
+
+## Install bbmap (version xz)
+
+```
+acompile --ntasks=4 
+module load anaconda
+conda create -n bbmap
+conda activate bbmap
+conda install bioconda::bbmap
+
+#get version
+bbmap.sh -v
+#version 39.81
+```
+
+
+## Map trimmed paired-end reads back to ≥2500 bp assembled contigs to generate coverage information for downstream MAG binning and abundance estimation using bbmap
+
+### Make folder for mapped reads
+
+```
+while read SAMPLE; do  
+mkdir -p /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/${SAMPLE}/mapped_reads  
+done < /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt
+
+while read SAMPLE; do  
+mkdir -p /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/${SAMPLE}/mapped_reads  
+done < /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt
+```
+
+## Individual assembly mapping
+
+```
+#!/bin/bash
+#SBATCH --job-name=bbmap_indiv_Assembly
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/bbmap_indivAssembly%j.out
+#SBATCH --error=slurm_output/bbmap_indivAssembly%j.err
+
+module load anaconda
+conda activate bbmap
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"   
+
+while read SAMPLE; do
+
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+    REF="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+
+    if [[ -f "$REF" && -f "$R1" && -f "$R2" ]]; then
+
+        bbmap.sh \
+            -Xmx48G \
+            threads=20 \
+            overwrite=t \
+            ref="$REF" \
+            in1="$R1" \
+            in2="$R2" \
+            out="$OUTPUT"
+
+        echo "Mapping complete for: $SAMPLE"
+
+    else
+        echo "WARNING: Missing files for $SAMPLE"
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples processed."
+
+```
+sbatch 13_bbmap_coA.sh
+Submitted batch job 27469328
+## CoAssembly mapping
+
+```
+#!/bin/bash
+#SBATCH --job-name=bbmap_CoAssembly
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/bbmap_CoAssembly%j.out
+#SBATCH --error=slurm_output/bbmap_CoAssembly%j.err
+
+module load anaconda
+conda activate bbmap
+
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"   
+while read SAMPLE; do
+
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+    REF="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+    R1="${BASE_DIR}/${SAMPLE}/concat_reads/${SAMPLE}_R1.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/concat_reads/${SAMPLE}_R2.fastq"
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+
+    if [[ -f "$REF" && -f "$R1" && -f "$R2" ]]; then
+
+        bbmap.sh \
+            -Xmx48G \
+            threads=20 \
+            overwrite=t \
+            ref="$REF" \
+            in1="$R1" \
+            in2="$R2" \
+            out="$OUTPUT"
+
+        echo "Mapping complete for: $SAMPLE"
+
+    else
+        echo "WARNING: Missing files for $SAMPLE"
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "All samples processed."
+
+```
+sbatch 13_bbmap_coA.sh
+Submitted batch job 27469284
+
+
+### Convert SAM to BAM files, sort, filter
+
