@@ -264,7 +264,6 @@ qiime feature-classifier fit-classifier-naive-bayes \
 --o-classifier gg2_2024.09_v4v5_nb_classifier.qza
 ```
 
-
 ### classify taxonomy using the new classifier
 
 ```

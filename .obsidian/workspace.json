@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 200
   },
   "right": {
     "id": "77bb2f67ac291c6f",
@@ -184,12 +184,14 @@
   },
   "active": "b31a960b73b92051",
   "lastOpenFiles": [
-    "Roberts & Smith MetaG Training Part 2.md",
-    "Roberts & Smith MetaG Data Processing.md",
     "Roberts & Smith MetaG Training Part 1.md",
+    "Roberts & Smith MetaG Training Part 2.md",
+    "try TRPCA for pmi modeling.md",
+    "antisar_18s.md",
+    "Roberts & Smith MetaG Data Processing.md",
     "sahar_mouse_commands.md",
+    "2026_workshop_website_setup_workflow.md",
     "Cristina_village_2026.md",
-    "test.md",
     "Microgale Microbiome Workflow.md",
     "Welcome.md"
   ]

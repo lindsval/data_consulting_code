@@ -1737,10 +1737,129 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
 bash 11_contig_stats_CoAssembly_loop.sh
 ```
 11_contig_stats_coAssembly.sh
-
 Submitted batch job 27469417 
 
-### Compile pullseqs
+## combine contig stats for each coAssembly
+
+### Combine all contig stats files
+
+```
+#!/bin/bash
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+SAMPLE_LIST="${BASE_DIR}/coA_sample_list.txt"
+OUTFILE="${BASE_DIR}/all_coassembly_contig_stats_summary.txt"
+
+# write header
+echo -e "Sample\
+\t0-100_reads\t0-100_reads_pct\t0-100_bps\t0-100_bps_pct\
+\t100-500_reads\t100-500_reads_pct\t100-500_bps\t100-500_bps_pct\
+\t500-1000_reads\t500-1000_reads_pct\t500-1000_bps\t500-1000_bps_pct\
+\t1000-5000_reads\t1000-5000_reads_pct\t1000-5000_bps\t1000-5000_bps_pct\
+\t5000-10000_reads\t5000-10000_reads_pct\t5000-10000_bps\t5000-10000_bps_pct\
+\t10000-20000_reads\t10000-20000_reads_pct\t10000-20000_bps\t10000-20000_bps_pct\
+\t20000-50000_reads\t20000-50000_reads_pct\t20000-50000_bps\t20000-50000_bps_pct\
+\t50000-100000_reads\t50000-100000_reads_pct\t50000-100000_bps\t50000-100000_bps_pct\
+\t100000-500000_reads\t100000-500000_reads_pct\t100000-500000_bps\t100000-500000_bps_pct\
+\t500000+_reads\t500000+_reads_pct\t500000+_bps\t500000+_bps_pct\
+\tTotal_sequences\tTotal_bps\tAvg_length\tN50" > "$OUTFILE"
+
+
+while read SAMPLE; do
+
+  FILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/${SAMPLE}_final.contigs_STATS.txt"
+
+  if [[ ! -f "$FILE" ]]; then
+    echo "Missing stats for $SAMPLE" >&2
+    continue
+  fi
+
+  awk -v sample="$SAMPLE" '
+  BEGIN { OFS="\t" }
+
+  /Length distribution/ {in_dist=1; next}
+  /General Information/ {in_dist=0; in_gen=1; next}
+
+  # parse distribution lines (robust to whitespace + formatting)
+  in_dist && /^[[:space:]]*[0-9]/ {
+
+    # extract range (e.g., 0-100, 100-500, etc.)
+    if (match($0, /([0-9]+-[0-9]+|\+):/, m)) {
+      range=m[1]
+      gsub(":", "", range)
+    } else {
+      next
+    }
+
+    # first match = reads + %
+    if (match($0, /([0-9]+)[[:space:]]+\(([0-9.]+)%\)/, r)) {
+      reads=r[1]
+      reads_pct=r[2]
+    } else {
+      reads="NA"; reads_pct="NA"
+    }
+
+    # second match = bps + %
+    rest=substr($0, RSTART + RLENGTH)
+    if (match(rest, /([0-9]+)[[:space:]]+\(([0-9.]+)%\)/, b)) {
+      bps=b[1]
+      bps_pct=b[2]
+    } else {
+      bps="NA"; bps_pct="NA"
+    }
+
+    data[range]=reads"\t"reads_pct"\t"bps"\t"bps_pct
+  }
+
+  # general info
+  in_gen && /Total number of sequences/ {
+    total_seq=$5
+  }
+  in_gen && /Total number of bps/ {
+    total_bps=$5
+  }
+  in_gen && /Average sequence length/ {
+    avg_len=$4
+  }
+  in_gen && /^N50/ {
+    n50=$2
+  }
+
+  END {
+    printf sample
+
+    ordered_ranges[1]="0-100"
+    ordered_ranges[2]="100-500"
+    ordered_ranges[3]="500-1000"
+    ordered_ranges[4]="1000-5000"
+    ordered_ranges[5]="5000-10000"
+    ordered_ranges[6]="10000-20000"
+    ordered_ranges[7]="20000-50000"
+    ordered_ranges[8]="50000-100000"
+    ordered_ranges[9]="100000-500000"
+    ordered_ranges[10]="500000+"
+
+    for (i=1; i<=10; i++) {
+      range_key = ordered_ranges[i]
+      if (range_key in data) {
+        printf "\t%s", data[range_key]
+      } else {
+        printf "\tNA\tNA\tNA\tNA"
+      }
+    }
+
+    printf "\t%s\t%s\t%s\t%s\n", total_seq, total_bps, avg_len, n50
+  }
+
+  ' "$FILE" >> "$OUTFILE"
+
+done < "$SAMPLE_LIST"
+
+echo "Done! Output written to: $OUTFILE"
+```
+bash 11a_combine_stats_coA.sh
+Done, the stats look great (for each coassembly, the contigs in the 1kb to 5kb range is about 20%)
+## Compile pullseqs
 
 ```
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts
@@ -1813,7 +1932,7 @@ echo "All samples processed."
 
 Submitted batch job 27468972
 
-### Pullseqs for coassembly
+### pullseqs for coassembly
 ```
 #!/bin/bash
 #SBATCH --job-name=pullseq_filter_Coassembly
@@ -1870,7 +1989,7 @@ bbmap.sh -v
 ```
 
 
-## Map trimmed paired-end reads back to ≥2500 bp assembled contigs to generate coverage information for downstream MAG binning and abundance estimation using bbmap
+## Map trimmed paired-end reads back to ≥2500 bp assembled contigs to generate coverage information for MAG binning and abundance estimation using bbmap
 
 ### Make folder for mapped reads
 
@@ -1885,6 +2004,8 @@ done < /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.tx
 ```
 
 ## Individual assembly mapping
+- uses the contigs as the reference to get coverage
+- compares every paired end read from every sample to see where the reads map to the contigs (gives position information)
 
 ```
 #!/bin/bash
@@ -1941,6 +2062,24 @@ echo "All samples processed."
 ```
 sbatch 13_bbmap_coA.sh
 Submitted batch job 27469328 (took about 4 hours)
+
+## Offload intermediate files to Globus since they are about to be purged
+
+```
+#for June, these are the folders/files that need to be transfered before june 16th
+
+/for every sample
+
+/fastqc/
+/processed_reads/
+
+#I will let raw reads be purged
+
+
+#done
+
+```
+
 ## CoAssembly mapping
 
 ```
@@ -1948,10 +2087,10 @@ Submitted batch job 27469328 (took about 4 hours)
 #SBATCH --job-name=bbmap_CoAssembly
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=20
-#SBATCH --time=23:00:00
-#SBATCH --mem=50gb
-#SBATCH --qos=normal
-#SBATCH --partition=amilan
+#SBATCH --mem=240gb
+#SBATCH --partition=amem
+#SBATCH --qos=mem-long
+#SBATCH --time=48:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
 #SBATCH --output=slurm_output/bbmap_CoAssembly%j.out
@@ -1994,21 +2133,20 @@ while read SAMPLE; do
 done < "$SAMPLE_LIST"
 
 echo "All samples processed."
-
 ```
 sbatch 13_bbmap_coA.sh
-Submitted batch job 27469284 (mine is still running, this will take a while....)
+Submitted batch job 27548717
 
 
 ## Convert SAM to BAM files, sort, filter
+- BAM file is sorted based on its position in the reference, as determined by its alignment
 
 ```
-
 #!/bin/bash  
 #SBATCH --job-name=indiv_sort  
 #SBATCH --nodes=1  
 #SBATCH --cpus-per-task=20  
-#SBATCH --time=04:00:00  
+#SBATCH --time=23:00:00  
 #SBATCH --mem=20gb  
 #SBATCH --qos=normal  
 #SBATCH --partition=amilan  
@@ -2052,17 +2190,78 @@ echo "All samples complete."
 ```
 
 14_sort_indiv_assembly.sh
-Submitted batch job 27475573
+Submitted batch job 27550775
+failed due to running out of time, resubmit using this code to only run on the files that were not yet run (53 out of 88 ran): 
+14_sort_indiv_assembly_remaining_samples.sh and that finished (job 27829401)
+
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_sort_remaining_samples
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=20gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_sort%j.out
+#SBATCH --error=slurm_output/indiv_sort%j.err
+
+module load samtools
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read SAMPLE; do
+
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    SAM_FILE="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sam"
+    BAM_FILE="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.bam"
+    SORTED_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped.sorted.bam"
+
+    echo "Checking sample: $SAMPLE"
+
+    # Skip samples that already finished
+    if [[ -f "$SORTED_BAM" ]]; then
+        echo "Sorted BAM already exists. Skipping $SAMPLE"
+        continue
+    fi
+
+    # Make sure SAM file exists
+    if [[ ! -f "$SAM_FILE" ]]; then
+        echo "Missing SAM file: $SAM_FILE"
+        continue
+    fi
+
+    echo "Processing $SAMPLE"
+
+    samtools view -@ 20 -bS "$SAM_FILE" \
+        > "$BAM_FILE"
+
+    samtools sort -@ 20 \
+        -T "${MAPPED_DIR}/${SAMPLE}_tmp_sort" \
+        -o "$SORTED_BAM" \
+        "$BAM_FILE"
+
+    echo "Finished: $SAMPLE"
+
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
+```
+14_sort_indiv_assembly_remaining_samples.sh
+sbatch 14_sort_indiv_assembly_remaining_samples.sh
+submitted, but alpine is on maintenance tomorrow, so its on dependency and should submit when the nodes come back online, finished.
 
 ```
 #!/bin/bash  
 #SBATCH --job-name=coA_sort  
 #SBATCH --nodes=1  
-#SBATCH --cpus-per-task=20  
-#SBATCH --time=04:00:00  
-#SBATCH --mem=20gb  
-#SBATCH --qos=normal  
-#SBATCH --partition=amilan  
+#SBATCH --cpus-per-task=20 
+#SBATCH --partition=amem
+#SBATCH --qos=mem-long
+#SBATCH --time=48:00:00 
 #SBATCH --mail-type=ALL  
 #SBATCH --mail-user=lindsval@colostate.edu  
 #SBATCH --output=slurm_output/coA_sort%j.out  
@@ -2101,11 +2300,11 @@ done < "$SAMPLE_LIST"
 echo "All samples complete."
 ```
 14_sort_CoAssembly.sh
-SUBMIT THIS NEXT ^^^^
-
+Submitted batch job 28213051, running
 
 
 ## Reformat individual assembly files
+BBTools reformat.sh script will filter to keep only the highest quality matches
 
 ```
 
@@ -2136,11 +2335,12 @@ OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
         reformat.sh \
             -Xmx100g \
             threads=20 \
-            idfilter=0.99 \
+            minidfilter=0.99 \
             in="$INPUT_BAM" \
             out="$OUTPUT_BAM" \
             pairedonly=t \
-            primaryonly=t
+            primaryonly=t \
+            overwrite=true
         echo "Finished: $SAMPLE"
     else
         echo "Missing BAM file: $INPUT_BAM"
@@ -2150,6 +2350,8 @@ echo "All samples complete."
 
 ```
 15_reformat_indiv.sh
+Submitted batch job 28402102, rerunning june 16th, since the `idfilter` flag was updated to `minidfilter`
+
 ## Reformat coassembly files
 
 ```
@@ -2181,11 +2383,12 @@ OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
         reformat.sh \
             -Xmx100g \
             threads=20 \
-            idfilter=0.99 \
+            minidfilter=0.99 \
             in="$INPUT_BAM" \
             out="$OUTPUT_BAM" \
             pairedonly=t \
-            primaryonly=t
+            primaryonly=t \
+            overwrite=true
         echo "Finished: $SAMPLE"
     else
         echo "Missing BAM file: $INPUT_BAM"
@@ -2195,6 +2398,7 @@ echo "All samples complete."
 
 ```
 15_reformat_coA.sh
+jobid 28402101. rerunning june 16th, since the `idfilter` flag was updated to `minidfilter`
 ## Binning with Metabat (v. 2:2.18)
 
 ### Install metabat
@@ -2255,7 +2459,7 @@ done < "$SAMPLE_LIST"
 
 echo "All samples complete."
 ```
-
+16_coA_binning.sh
 ## Individual assembly binning
 ```
 #!/bin/bash
@@ -2268,14 +2472,14 @@ echo "All samples complete."
 #SBATCH --partition=amilan
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
-#SBATCH --output=slurm_output/coA_metabat%j.out
-#SBATCH --error=slurm_output/coA_metabat%j.err
+#SBATCH --output=slurm_output/indiv_metabat%j.out
+#SBATCH --error=slurm_output/indiv_metabat%j.err
 
 module load anaconda
 conda activate metabat2
 
-SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
-BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/"
 
 while read SAMPLE; do
     SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
@@ -2296,3 +2500,195 @@ while read SAMPLE; do
 done < "$SAMPLE_LIST"
 
 echo "All samples complete."
+
+```
+
+16_indiv_bining.sh
+Submitted batch job 28259501
+
+
+## Transfer files to Globus that need to be transfer before 90 purge: 
+
+```
+# create a new folder: 
+mkdir files_to_tranfer_june12
+
+#for June, these are the folders/files that need to be transfered before june 16th
+
+#for every sample, the following directories need to be transfered
+#/fastqc/
+#/processed_reads/
+
+#I will let raw reads be purged
+
+#!/bin/bash
+#SBATCH --job-name=transfer_files
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=250gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/transfer_files%j.out
+#SBATCH --error=slurm_output/transfer_files%j.err
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG
+
+mkdir -p files_to_transfer_june12
+
+while read SAMPLE; do
+
+    # skip empty lines or comments
+    [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
+
+    SRC_FASTQC="$SAMPLE/fastqc"
+    SRC_PROCESSED="$SAMPLE/processed_reads"
+
+    DEST="files_to_transfer_june12/$SAMPLE"
+    mkdir -p "$DEST"
+
+    if [ -d "$SRC_FASTQC" ]; then
+        cp -r "$SRC_FASTQC" "$DEST/"
+    else
+        echo "Missing fastqc for $SAMPLE"
+    fi
+
+    if [ -d "$SRC_PROCESSED" ]; then
+        cp -r "$SRC_PROCESSED" "$DEST/"
+    else
+        echo "Missing processed_reads for $SAMPLE"
+    fi
+
+done < sample_list.txt
+
+
+```
+
+transfer_files.sh
+Submitted batch job 28260568
+Then in globus, just have to copy over that whole directory with one click.
+
+#after tranfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
+
+test the binning on one sample first with new changes: 
+
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_metabat_bin_test
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=23:00:00
+#SBATCH --mem=250gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_metabat_bin_test%j.out
+#SBATCH --error=slurm_output/indiv_metabat_bin_test%j.err
+
+set -euo pipefail
+
+module load anaconda
+conda activate metabat2
+
+# Prevent thread oversubscription (fixes segfaults)
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OPENBLAS_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list_test.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+echo "Starting MetaBAT2 binning pipeline"
+echo "CPUs: $SLURM_CPUS_PER_TASK"
+
+echo "===== SAMPLE LIST PREVIEW ====="
+nl -ba "$SAMPLE_LIST"
+echo "==============================="
+
+while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
+
+    [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
+
+    echo "=============================="
+    echo "Processing sample: [$SAMPLE]"
+    echo "=============================="
+
+    SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
+    ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+
+    CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
+    BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
+
+    OUT_DIR="${ASSEMBLY_DIR}/metabat_bins"
+    mkdir -p "$OUT_DIR"
+
+    echo "CONTIGS: $CONTIGS"
+    echo "BAM: $BAM"
+
+    # sanity checks
+    if [[ ! -f "$CONTIGS" ]]; then
+        echo "ERROR: missing contigs"
+        continue
+    fi
+
+    if [[ ! -f "$BAM" ]]; then
+        echo "ERROR: missing BAM"
+        continue
+    fi
+
+    cd "$ASSEMBLY_DIR"
+
+    echo "Step 1: generating depth file"
+
+    jgi_summarize_bam_contig_depths \
+        --outputDepth depth.txt \
+        --numThreads $SLURM_CPUS_PER_TASK \
+        "$BAM"
+
+    echo "Step 2: running MetaBAT2"
+
+    metabat2 \
+        -i "$CONTIGS" \
+        -a depth.txt \
+        -o "$OUT_DIR/${SAMPLE}_bin" \
+        --threads $SLURM_CPUS_PER_TASK
+
+    echo "Finished sample: $SAMPLE"
+
+done < "$SAMPLE_LIST"
+
+echo "All samples complete."
+```
+sbatch test_binning.sh
+Submitted batch job 28261659, still failed, need to tune the mem/cores
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=indiv_metabat_bin_test
+#SBATCH --nodes=1
+#SBATCH --ntasks=30
+#SBATCH --time=23:00:00
+#SBATCH --mem=250gb
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_metabat_bin_test2%j.out
+#SBATCH --error=slurm_output/indiv_metabat_bin_test2%j.err
+
+module load anaconda
+conda activate metabat2
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/Drought_Rhizo_Post_7/mapped_reads
+jgi_summarize_bam_contig_depths --outputDepth depth.txt Drought_Rhizo_Post_7_final.contigs_2500_mapped99per.sorted.bam
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/Drought_Rhizo_Post_7/assembly/megahit_out
+
+metabat2 -i Drought_Rhizo_Post_7_final.contigs_2500.fa -a depth.txt -o Drought_Rhizo_Post_7_bins -t 6
+```
+Submitted batch job 28371482
