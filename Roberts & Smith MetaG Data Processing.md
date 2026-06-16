@@ -3,6 +3,7 @@
 - per sample directories with: raw_reads, processed_reads, fastqc, assembly subdirectories
 - CURC software https://curc.readthedocs.io/en/latest/software/curc_provided_software.html
 
+## Unzip raw reads
 ```
 
 # unzip the files
@@ -204,7 +205,7 @@ conda activate sickle-trim
 conda install sickle-trim
 ```
 
-# Run sickle on the raw reads, we will use the sickle default of 20 quality score for trimming
+## Run sickle on the raw reads, we will use the sickle default of 20 quality score for trimming
 
 ```
 #!/bin/bash
@@ -2568,9 +2569,9 @@ done < sample_list.txt
 
 transfer_files.sh
 Submitted batch job 28260568
-Then in globus, just have to copy over that whole directory with one click.
+Then in globus, just have to copy over that whole directory 
 
-#after tranfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
+# after transfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
 
 test the binning on one sample first with new changes: 
 
