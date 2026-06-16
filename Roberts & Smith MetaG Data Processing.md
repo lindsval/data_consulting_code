@@ -2351,7 +2351,7 @@ echo "All samples complete."
 
 ```
 15_reformat_indiv.sh
-Submitted batch job 28402102, rerunning june 16th, since the `idfilter` flag was updated to `minidfilter`
+Submitted batch job 28402102, rerunning june 16th, since the `idfilter` flag was updated to `minidfilter`, DONE
 
 ## Reformat coassembly files
 
@@ -2400,6 +2400,7 @@ echo "All samples complete."
 ```
 15_reformat_coA.sh
 jobid 28402101. rerunning june 16th, since the `idfilter` flag was updated to `minidfilter`
+DONE
 ## Binning with Metabat (v. 2:2.18)
 
 ### Install metabat
@@ -2422,17 +2423,16 @@ conda activate metabat2
 ## Co assembly binning
 ```
 #!/bin/bash
-#SBATCH --job-name=coA_metabat
+#SBATCH --job-name=coA_metabat_bin
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=20
+#SBATCH --ntasks=6
 #SBATCH --time=23:00:00
-#SBATCH --mem=250gb
 #SBATCH --qos=normal
 #SBATCH --partition=amilan
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
-#SBATCH --output=slurm_output/coA_metabat%j.out
-#SBATCH --error=slurm_output/coA_metabat%j.err
+#SBATCH --output=slurm_output/coA_metabat_bin%j.out
+#SBATCH --error=slurm_output/coA_metabat_bin%j.err
 
 module load anaconda
 conda activate metabat2
@@ -2440,72 +2440,92 @@ conda activate metabat2
 SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
 
-while read SAMPLE; do
+while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
+
+    [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
+
     SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
-    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
     ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+
     CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
     BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
-    echo "Processing sample: $SAMPLE"
-    if [[ -f "$CONTIGS" && -f "$BAM" ]]; then
-        cd "$ASSEMBLY_DIR"
-        runMetaBat.sh "$CONTIGS" "$BAM"
-        echo "Finished: $SAMPLE"
-    else
-        echo "Missing files for: $SAMPLE"
-        echo "Contigs: $CONTIGS"
-        echo "BAM: $BAM"
-    fi
-done < "$SAMPLE_LIST"
 
+    OUT_DIR="${SAMPLE_DIR}/metabat_bins"
+    mkdir -p "$OUT_DIR"
+    if [[ ! -f "$CONTIGS" || ! -f "$BAM" ]]; then
+        echo "Skipping $SAMPLE (missing input)"
+        continue
+    fi
+    echo "Processing $SAMPLE"
+    DEPTH="${ASSEMBLY_DIR}/depth.txt"
+    jgi_summarize_bam_contig_depths \
+        --outputDepth "$DEPTH" \
+        "$BAM"
+    metabat2 \
+        -i "$CONTIGS" \
+        -a "$DEPTH" \
+        -o "$OUT_DIR/${SAMPLE}_bin" \
+        -t 6
+done < "$SAMPLE_LIST"
 echo "All samples complete."
 ```
 16_coA_binning.sh
+Submitted batch job 28414634
 ## Individual assembly binning
 ```
 #!/bin/bash
 #SBATCH --job-name=indiv_metabat_bin
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=20
+#SBATCH --ntasks=6
 #SBATCH --time=23:00:00
-#SBATCH --mem=250gb
 #SBATCH --qos=normal
 #SBATCH --partition=amilan
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
-#SBATCH --output=slurm_output/indiv_metabat%j.out
-#SBATCH --error=slurm_output/indiv_metabat%j.err
+#SBATCH --output=slurm_output/indiv_metabat_bin%j.out
+#SBATCH --error=slurm_output/indiv_metabat_bin%j.err
 
 module load anaconda
 conda activate metabat2
 
 SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
-BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
 
-while read SAMPLE; do
+while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
+
+    [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
+
     SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
-    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
     ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+
     CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
     BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
-    echo "Processing sample: $SAMPLE"
-    if [[ -f "$CONTIGS" && -f "$BAM" ]]; then
-        cd "$ASSEMBLY_DIR"
-        runMetaBat.sh "$CONTIGS" "$BAM"
-        echo "Finished: $SAMPLE"
-    else
-        echo "Missing files for: $SAMPLE"
-        echo "Contigs: $CONTIGS"
-        echo "BAM: $BAM"
-    fi
-done < "$SAMPLE_LIST"
 
+    OUT_DIR="${SAMPLE_DIR}/metabat_bins"
+    mkdir -p "$OUT_DIR"
+    if [[ ! -f "$CONTIGS" || ! -f "$BAM" ]]; then
+        echo "Skipping $SAMPLE (missing input)"
+        continue
+    fi
+    echo "Processing $SAMPLE"
+    DEPTH="${ASSEMBLY_DIR}/depth.txt"
+    jgi_summarize_bam_contig_depths \
+        --outputDepth "$DEPTH" \
+        "$BAM"
+    metabat2 \
+        -i "$CONTIGS" \
+        -a "$DEPTH" \
+        -o "$OUT_DIR/${SAMPLE}_bin" \
+        -t 6
+done < "$SAMPLE_LIST"
 echo "All samples complete."
 
 ```
 
 16_indiv_bining.sh
-Submitted batch job 28259501
+Submitted batch job 28414617
 
 
 ## Transfer files to Globus that need to be transfer before 90 purge: 
@@ -2571,17 +2591,17 @@ transfer_files.sh
 Submitted batch job 28260568
 Then in globus, just have to copy over that whole directory 
 
-# after transfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
+## after transfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
 
-test the binning on one sample first with new changes: 
+
+## Test the binning on one sample first with new changes: 
 
 ```
 #!/bin/bash
 #SBATCH --job-name=indiv_metabat_bin_test
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=20
-#SBATCH --time=23:00:00
-#SBATCH --mem=250gb
+#SBATCH --ntasks=6
+#SBATCH --time=01:00:00
 #SBATCH --qos=normal
 #SBATCH --partition=amilan
 #SBATCH --mail-type=ALL
@@ -2589,33 +2609,15 @@ test the binning on one sample first with new changes:
 #SBATCH --output=slurm_output/indiv_metabat_bin_test%j.out
 #SBATCH --error=slurm_output/indiv_metabat_bin_test%j.err
 
-set -euo pipefail
-
 module load anaconda
 conda activate metabat2
-
-# Prevent thread oversubscription (fixes segfaults)
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export OPENBLAS_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list_test.txt"
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
 
-echo "Starting MetaBAT2 binning pipeline"
-echo "CPUs: $SLURM_CPUS_PER_TASK"
-
-echo "===== SAMPLE LIST PREVIEW ====="
-nl -ba "$SAMPLE_LIST"
-echo "==============================="
-
 while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
 
     [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
-
-    echo "=============================="
-    echo "Processing sample: [$SAMPLE]"
-    echo "=============================="
 
     SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
     ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_out"
@@ -2624,72 +2626,31 @@ while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
     CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
     BAM="${MAPPED_DIR}/${SAMPLE}_final.contigs_2500_mapped99per.sorted.bam"
 
-    OUT_DIR="${ASSEMBLY_DIR}/metabat_bins"
+    OUT_DIR="${SAMPLE_DIR}/metabat_bins"
     mkdir -p "$OUT_DIR"
 
-    echo "CONTIGS: $CONTIGS"
-    echo "BAM: $BAM"
-
-    # sanity checks
-    if [[ ! -f "$CONTIGS" ]]; then
-        echo "ERROR: missing contigs"
+    if [[ ! -f "$CONTIGS" || ! -f "$BAM" ]]; then
+        echo "Skipping $SAMPLE (missing input)"
         continue
     fi
 
-    if [[ ! -f "$BAM" ]]; then
-        echo "ERROR: missing BAM"
-        continue
-    fi
+    echo "Processing $SAMPLE"
 
-    cd "$ASSEMBLY_DIR"
-
-    echo "Step 1: generating depth file"
+    DEPTH="${ASSEMBLY_DIR}/depth.txt"
 
     jgi_summarize_bam_contig_depths \
-        --outputDepth depth.txt \
-        --numThreads $SLURM_CPUS_PER_TASK \
+        --outputDepth "$DEPTH" \
         "$BAM"
-
-    echo "Step 2: running MetaBAT2"
 
     metabat2 \
         -i "$CONTIGS" \
-        -a depth.txt \
+        -a "$DEPTH" \
         -o "$OUT_DIR/${SAMPLE}_bin" \
-        --threads $SLURM_CPUS_PER_TASK
-
-    echo "Finished sample: $SAMPLE"
+        -t 6
 
 done < "$SAMPLE_LIST"
 
 echo "All samples complete."
 ```
 sbatch test_binning.sh
-Submitted batch job 28261659, still failed, need to tune the mem/cores
-
-```
-
-#!/bin/bash
-#SBATCH --job-name=indiv_metabat_bin_test
-#SBATCH --nodes=1
-#SBATCH --ntasks=30
-#SBATCH --time=23:00:00
-#SBATCH --mem=250gb
-#SBATCH --qos=normal
-#SBATCH --partition=amilan
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=lindsval@colostate.edu
-#SBATCH --output=slurm_output/indiv_metabat_bin_test2%j.out
-#SBATCH --error=slurm_output/indiv_metabat_bin_test2%j.err
-
-module load anaconda
-conda activate metabat2
-
-cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/Drought_Rhizo_Post_7/mapped_reads
-jgi_summarize_bam_contig_depths --outputDepth depth.txt Drought_Rhizo_Post_7_final.contigs_2500_mapped99per.sorted.bam
-
-cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/Drought_Rhizo_Post_7/assembly/megahit_out
-
-metabat2 -i Drought_Rhizo_Post_7_final.contigs_2500.fa -a depth.txt -o Drought_Rhizo_Post_7_bins -t 6
-```
-Submitted batch job 28371482
+Submitted batch job 28414490
