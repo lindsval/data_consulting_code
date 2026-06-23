@@ -2471,7 +2471,7 @@ done < "$SAMPLE_LIST"
 echo "All samples complete."
 ```
 16_coA_binning.sh
-Submitted batch job 28414634
+Submitted batch job 28414634, done
 ## Individual assembly binning
 ```
 #!/bin/bash
@@ -2525,7 +2525,7 @@ echo "All samples complete."
 ```
 
 16_indiv_bining.sh
-Submitted batch job 28414617
+Submitted batch job 28414617, done
 
 
 ## Transfer files to Globus that need to be transfer before 90 purge: 
@@ -2654,3 +2654,416 @@ echo "All samples complete."
 ```
 sbatch test_binning.sh
 Submitted batch job 28414490
+
+
+## Check the number of bins generated and record in a new file
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+OUTFILE="${BASE_DIR}/metabat_bin_counts.txt"
+
+echo -e "Sample\tBin_count" > "$OUTFILE"
+total=0
+while read sample; do
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ -d "$BIN_DIR" ]]; then
+        count=$(find "$BIN_DIR" -maxdepth 1 -name "*.fa" | wc -l)
+        total=$((total + count))
+    else
+        count="NA"
+    fi
+    echo -e "${sample}\t${count}" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+echo -e "TOTAL\t${total}" >> "$OUTFILE"
+echo "Results written to $OUTFILE"
+
+# 310 individual assembly bins
+
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+OUTFILE="${BASE_DIR}/metabat_bin_counts_coassembly.txt"
+
+echo -e "Sample\tBin_count" > "$OUTFILE"
+total=0
+while read sample; do
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ -d "$BIN_DIR" ]]; then
+        count=$(find "$BIN_DIR" -maxdepth 1 -name "*.fa" | wc -l)
+        total=$((total + count))
+    else
+        count="NA"
+    fi
+    echo -e "${sample}\t${count}" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+echo -e "TOTAL\t${total}" >> "$OUTFILE"
+echo "Results written to $OUTFILE"
+```
+
+
+
+
+## checkM v1.2.3 install
+
+```
+
+acompile --ntasks=4 
+module load anaconda
+conda create -n checkm
+conda activate checkm
+conda install -c bioconda -c conda-forge checkm-genome
+checkm -h
+
+
+```
+
+
+## Run checkM on individual assembly bins
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_checkM
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --time=23:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_checkM%j.out
+#SBATCH --error=slurm_output/indiv_checkM%j.err
+
+module load anaconda
+conda activate checkm
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read sample; do
+    echo "Processing ${sample}..."
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ ! -d "${BIN_DIR}" ]]; then
+        echo "Skipping ${sample}: metabat_bins not found."
+        continue
+    fi
+    cd "${BIN_DIR}"
+    # Run CheckM
+    checkm lineage_wf \
+        -t 12 \
+        -x fa \
+        . \
+        checkm
+    # Generate QA table
+    checkm qa \
+        -o 2 \
+        -f checkm/results.txt \
+        --tab_table \
+        -t 12 \
+        checkm/lineage.ms \
+        checkm
+done < "${SAMPLE_LIST}"
+
+
+```
+
+sbatch 17_indiv_checkM.sh
+Submitted batch job 28449358, done
+
+
+## pull out the HQ/MQ bins
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+OUTDIR="${BASE_DIR}/checkm_filtered_bins_individual"
+mkdir -p "$OUTDIR"
+while read sample; do
+    echo "Processing ${sample}..."
+    CHECKM_FILE="${BASE_DIR}/${sample}/metabat_bins/checkm/results.txt"
+    OUTFILE="${OUTDIR}/${sample}_HQ_MQ_bins.txt"
+    if [[ ! -f "$CHECKM_FILE" ]]; then
+        echo -e "${sample}\tNO_CHECKM_FILE" > "$OUTFILE"
+        continue
+    fi
+    echo -e "bin\tquality" > "$OUTFILE"
+    awk -F "\t" '
+    NR>1 {
+        if ($6 >= 90 && $7 <= 5) {
+            print $1 "\tHIGH"
+        }
+        else if ($6 >= 50 && $7 <= 10) {
+            print $1 "\tMEDIUM"
+        }
+    }' "$CHECKM_FILE" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+```
+
+```
+nano extract_mqhq_bins_indiv.sh
+chmod +x extract_mqhq_bins_indiv.sh 
+./extract_mqhq_bins_indiv.sh 
+```
+
+### Count the number of bins from the individual assembly / checkM that were medium- or high-quality
+```
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/checkm_filtered_bins_individual" 
+grep -h -E "HIGH|MEDIUM" ${OUTDIR}/*_HQ_MQ_bins.txt | wc -l
+
+# 48 total... seems low... 
+```
+
+## Run checkM on coassembly assembly bins
+```
+#!/bin/bash
+#SBATCH --job-name=coA_checkM
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --time=23:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coA_checkM%j.out
+#SBATCH --error=slurm_output/coA_checkM%j.err
+
+module load anaconda
+conda activate checkm
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read sample; do
+    echo "Processing ${sample}..."
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ ! -d "${BIN_DIR}" ]]; then
+        echo "Skipping ${sample}: metabat_bins not found."
+        continue
+    fi
+    cd "${BIN_DIR}"
+    # Run CheckM
+    checkm lineage_wf \
+        -t 12 \
+        -x fa \
+        . \
+        checkm
+    # Generate QA table
+    checkm qa \
+        -o 2 \
+        -f checkm/results.txt \
+        --tab_table \
+        -t 12 \
+        checkm/lineage.ms \
+        checkm
+done < "${SAMPLE_LIST}"
+
+
+```
+
+sbatch 17_coA_checkM.sh
+Submitted batch job 28449436, done (job says failed just becuase its failing on the "control" assembly which has no assembly or bins)
+
+
+## pull out the HQ/MQ bins
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+OUTDIR="${BASE_DIR}/checkm_filtered_bins"
+mkdir -p "$OUTDIR"
+while read sample; do
+    echo "Processing ${sample}..."
+    CHECKM_FILE="${BASE_DIR}/${sample}/metabat_bins/checkm/results.txt"
+    OUTFILE="${OUTDIR}/${sample}_HQ_MQ_bins.txt"
+    if [[ ! -f "$CHECKM_FILE" ]]; then
+        echo -e "${sample}\tNO_CHECKM_FILE" > "$OUTFILE"
+        continue
+    fi
+    echo -e "bin\tquality" > "$OUTFILE"
+    awk -F "\t" '
+    NR>1 {
+        if ($6 >= 90 && $7 <= 5) {
+            print $1 "\tHIGH"
+        }
+        else if ($6 >= 50 && $7 <= 10) {
+            print $1 "\tMEDIUM"
+        }
+    }' "$CHECKM_FILE" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+```
+
+```
+nano extract_mqhq_bins_coA.sh
+chmod +x extract_mqhq_bins_coA.sh 
+./extract_mqhq_bins_coA.sh 
+```
+
+### Count the number of bins from the coassembly / checkM that were medium- or high-quality
+```
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/checkm_filtered_bins"  
+  
+grep -h -E "HIGH|MEDIUM" ${OUTDIR}/*_HQ_MQ_bins.txt | wc -l
+
+# 57 total
+```
+
+## CheckM2 (compare results to checkM1); CheckM2 v1.1.0
+
+### Install
+```
+acompile --ntasks=4 
+#load mamba
+module load miniforge
+mamba create -n checkm2 -c conda-forge -c bioconda checkm2
+mamba activate checkm2
+checkm2 --help
+
+#download the DIAMOND database and store it in projects
+mkdir -p /projects/$USER/databases/checkm2
+checkm2 database --download \
+    --path /projects/lindsval@colostate.edu/databases/checkm2
+
+checkm2 -h
+checkm2 database --status \
+    --path /projects/lindsval@colostate.edu/databases/checkm2
+
+ainteractive --ntasks=6
+checkm2 testrun --threads 6 #run this to test the setup, everything works
+
+#to load checkM2
+module load miniforge
+mamba activate checkm2
+
+
+```
+
+## Run CheckM2 for coassembly
+
+```
+#!/bin/bash
+#SBATCH --job-name=coA_checkM2
+#SBATCH --nodes=1
+#SBATCH --ntasks=20
+#SBATCH --time=23:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coA_checkM2_%j.out
+#SBATCH --error=slurm_output/coA_checkM2_%j.err
+
+
+#to load checkM2
+module load miniforge
+mamba activate checkm2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+
+while read sample; do
+    echo "Processing ${sample}..."
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ ! -d "${BIN_DIR}" ]]; then
+        echo "Skipping ${sample}: metabat_bins not found."
+        continue
+    fi
+    OUTDIR="${BIN_DIR}/checkm2"
+    # Run CheckM2
+    checkm2 predict \
+        --threads 6 \
+        --input "${BIN_DIR}" \
+        -x fa \
+        --output-directory "${OUTDIR}" \
+        --force
+done < "${SAMPLE_LIST}"
+
+
+```
+18_coA_checkM2.sh
+ended up running on command line
+
+
+
+## pull out the HQ/MQ bins
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/coA_sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly"
+OUTDIR="${BASE_DIR}/checkm2_filtered_bins"
+mkdir -p "$OUTDIR"
+while read sample; do
+    echo "Processing ${sample}..."
+    CHECKM_FILE="${BASE_DIR}/${sample}/metabat_bins/checkm2/quality_report.tsv"
+    OUTFILE="${OUTDIR}/${sample}_HQ_MQ_bins_checkm2.txt"
+    if [[ ! -f "$CHECKM_FILE" ]]; then
+        echo -e "${sample}\tNO_CHECKM_FILE" > "$OUTFILE"
+        continue
+    fi
+    echo -e "bin\tquality" > "$OUTFILE"
+    awk -F "\t" '
+    NR>1 {
+        if ($2 >= 90 && $3 <= 5) {
+            print $1 "\tHIGH"
+        }
+        else if ($2 >= 50 && $3 <= 10) {
+            print $1 "\tMEDIUM"
+        }
+    }' "$CHECKM_FILE" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+```
+
+```
+nano extract_mqhq_bins_coA_checkm2.sh
+chmod +x extract_mqhq_bins_coA_checkm2.sh 
+./extract_mqhq_bins_coA_checkm2.sh 
+```
+
+### Count the number of bins from the coassembly / checkM2 that were medium- or high-quality
+```
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/coassembly/checkm2_filtered_bins"  
+  
+grep -h -E "HIGH|MEDIUM" ${OUTDIR}/*_HQ_MQ_bins_checkm2.txt | wc -l
+
+# 60 total
+```
+
+
+## Run CheckM2 for individual assembly bins
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_checkM2
+#SBATCH --nodes=1
+#SBATCH --ntasks=20
+#SBATCH --time=23:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_checkM2_%j.out
+#SBATCH --error=slurm_output/indiv_checkM2_%j.err
+
+#to load checkM2
+module load miniforge
+mamba activate checkm2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read sample; do
+    echo "Processing ${sample}..."
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins"
+    if [[ ! -d "${BIN_DIR}" ]]; then
+        echo "Skipping ${sample}: metabat_bins not found."
+        continue
+    fi
+    OUTDIR="${BIN_DIR}/checkm2"
+    # Run CheckM2
+    checkm2 predict \
+        --threads 20 \
+        --input "${BIN_DIR}" \
+        -x fa \
+        --output-directory "${OUTDIR}" \
+        --force
+done < "${SAMPLE_LIST}"
+```
+18_indiv_checkM2.sh
+Submitted batch job 28546664
