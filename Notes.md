@@ -64,28 +64,34 @@ multiqc \
 --filename raw_multiqc_report.html
 
 ```
+since i cant get DRAM to be reinstalled in order to share with VT and Chance, i am running VT's for her
+
+copy her files into my scratch
+cp 
+
+``
+```
+#!/bin/bash
+#SBATCH --job-name=DRAM_VT
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-long
+#SBATCH --ntasks=20
+#SBATCH --time=160:30:00
+#SBATCH --nodes=1
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/DRAM_VT_%j.out
+#SBATCH --error=slurm_output/DRAM_VT_%j.err 
+
+
+module load anaconda
+conda activate DRAM_v1.5.0_use
+
+cd /pl/active/courses/2026_summer/CSU_2026/VT_well_water_metaG/dereplicated_genomes
+
+DRAM.py annotate -i '*fa' -o  DRAM_1.5_09092026 --min_contig_size 2500 --threads 20
+DRAM.py distill -i DRAM_1.5_09092026/annotations.tsv -o DRAM_1.5_09092026/distill
 
 ```
-
-cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
-
-count=0  
-while read sample; do  
-compgen -G "${sample}/processed_reads/*R1_bbduktrimmed.fastq" > /dev/null &&((count++))  
-done < sample_list.txt  
-  
-echo $count
-# only31 finished, ran out of storage on alpine..... 
-
-count=0
-
-while read -r sample; do
-    for file in "${sample}"/processed_reads/*_bbduktrimmed.fastq; do
-        if [[ -f "$file" ]]; then
-            echo "$file"
-            ((count++))
-        fi
-    done
-done < sample_list.txt
-
-echo "Total files: $count"
+sbatch DRAM_1.5.sh
+Submitted batch job 32336021

@@ -5737,4 +5737,31 @@ DRAM.py distill -i DRAM_1.5_09082026/annotations.tsv -o DRAM_1.5_09082026/distil
 
 ```
 sbatch DRAM_50mags.sh
-Submitted batch job 32312472
+Submitted batch job 32312472, oops ran this on all 151 mags...
+
+```
+#!/bin/bash
+#SBATCH --job-name=DRAM_50mags_use
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=20
+#SBATCH --time=23:30:00
+#SBATCH --nodes=1
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/DRAM_50mags_use_%j.out
+#SBATCH --error=slurm_output/DRAM_50mags_use_%j.err 
+
+
+module load anaconda
+conda activate DRAM_v1.5.0_use
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes
+
+DRAM.py annotate -i '*fa' -o  DRAM_1.5_09092026 --min_contig_size 2500 --threads 20
+DRAM.py distill -i DRAM_1.5_09092026/annotations.tsv -o DRAM_1.5_09092026/distill
+
+```
+sbatch DRAM_50mags_use.sh
+Submitted batch job 32335874
+
