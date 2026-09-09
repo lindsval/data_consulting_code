@@ -54,6 +54,7 @@ sbatch import_demux_sahar_mouse.sh
 Submitted batch job 24302503
 
 Data Quality: Reads looks wonderful! these are MiSeq i100 data, so quality scores are binned. tuncated both f and r at 250:
+
 ## Denoise 
 
 ```
