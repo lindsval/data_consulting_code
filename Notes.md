@@ -1,3 +1,4 @@
+### check amem status here https://xdmod.rc.colorado.edu/
 ### acompile
 
 ```
@@ -95,3 +96,12 @@ DRAM.py distill -i DRAM_1.5_09092026/annotations.tsv -o DRAM_1.5_09092026/distil
 ```
 sbatch DRAM_1.5.sh
 Submitted batch job 32336021
+
+```
+cd /projects/lindsval@colostate.edu
+acompile --ntasks=4 
+module load anaconda
+conda config --set solver libmamba
+conda config --show solver
+time conda env create -f environment.yaml -n test_install_DRAM_v1.5.0_sept2026
+```

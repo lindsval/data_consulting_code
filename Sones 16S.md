@@ -860,6 +860,7 @@ qiime fragment-insertion sepp \
 --o-placements tree_placements_gg2.qza \
 --p-threads 4
 
+cd /scratch/alpine/lindsval@colostate.edu/sones_16S/
 #core metrics 
 qiime diversity core-metrics-phylogenetic \
 --i-phylogeny tree/tree_gg2.qza \
@@ -873,5 +874,136 @@ cd /scratch/alpine/lindsval@colostate.edu/sones_16S/slurm
 sbatch `submit_all.sh`
 Submitted batch job 31768393
 
+~={orange}## ANCOM-BC2 (level 6)=~
+```
 
-~={red}### then redo the ancombc stuff.=~
+module purge
+module load qiime2/2026.1_amplicon
+
+
+```
+
+```
+
+cd ancombc2
+
+qiime feature-table filter-samples \
+--i-table table_noMitoChloro_nb_GG2.qza \
+--p-min-frequency 40000 \
+--o-filtered-table table_noMitoChloro_nb_GG2_40k.qza
+
+# set to 3 so tht a feature must be observed in 3 sampeles (and our groups are sizes of 4)
+qiime feature-table filter-features \
+--i-table ../dada2/table_noMitoChloro_nb_GG2_40k.qza \
+--p-min-frequency 50 \
+--p-min-samples 3 \
+--o-filtered-table table_noMitoChloro_nb_GG2_40k_abund.qza
+
+qiime taxa collapse \
+--i-table table_noMitoChloro_nb_GG2_40k_abund.qza \
+--i-taxonomy ../taxonomy/taxonomy_nb_gg2.qza \
+--p-level 6 \
+--o-collapsed-table table_noMitoChloro_nb_GG2_40k_abund_L6.qza
+
+qiime composition ancombc2 \
+--i-table table_noMitoChloro_nb_GG2_40k_abund_L6.qza \
+--m-metadata-file ../metadata/metadata_for_ancom.txt \
+--p-fixed-effects-formula 'Group' \
+--p-reference-levels 'Group::C57_LD' \
+--o-ancombc2-output ancombc2_full_L6.qza
+
+qiime composition ancombc2-visualizer \
+--i-data ancombc2_full_L6.qza \
+--o-visualization ancombc2_full_L6.qzv
+
+qiime tools export \
+  --input-path ancombc2_full_L6.qza \
+  --output-path ancombc2_full_L6
+  
+  
+  
+## then run ancombc2 again with the plant diet group as refernce
+
+qiime composition ancombc2 \
+--i-table table_noMitoChloro_nb_GG2_40k_abund_L6.qza \
+--m-metadata-file ../metadata/metadata_for_ancom.txt \
+--p-fixed-effects-formula 'Group' \
+--p-reference-levels 'Group::BPH5_LD' \
+--o-ancombc2-output ancombc2_full_L6_BPH_LD_asRef.qza
+
+qiime composition ancombc2-visualizer \
+--i-data ancombc2_full_L6_BPH_LD_asRef.qza \
+--o-visualization ancombc2_full_L6_BPH_LD_asRef.qzv
+
+qiime tools export \
+  --input-path ancombc2_full_L6_BPH_LD_asRef.qza \
+  --output-path ancombc2_full_L6_BPH_LD_asRef
+
+
+  
+```
+
+~={yellow}do/edit below=~
+```
+
+
+## Export alpha and beta diversity files to then run in R
+cd /scratch/alpine/lindsval@colostate.edu/sones_16S
+mkdir export
+#shannon
+unzip core_metrics_rare40k_gg2_NP_F_only/shannon_vector.qza -d export/shannon
+# Observed Features  
+unzip core_metrics_rare40k_gg2_NP_F_only/observed_features_vector.qza -d export/observed_features  
+# Faith's PD  
+unzip core_metrics_rare40k_gg2_NP_F_only/faith_pd_vector.qza -d export/faith_pd  
+# Pielou's evenness  
+unzip core_metrics_rare40k_gg2_NP_F_only/evenness_vector.qza -d export/evenness
+# Bray Curtis  
+unzip core_metrics_rare40k_gg2_NP_F_only/bray_curtis_pcoa_results.qza -d export/bray_curtis
+# Jaccard  
+unzip core_metrics_rare40k_gg2_NP_F_only/jaccard_pcoa_results.qza -d export/jaccard
+# Unweighted Unifrac  
+unzip core_metrics_rare40k_gg2_NP_F_only/unweighted_unifrac_pcoa_results.qza -d export/unweighted_unifrac  
+# Weighted Unifrac  
+unzip core_metrics_rare40k_gg2_NP_F_only/weighted_unifrac_pcoa_results.qza -d export/weighted_unifrac
+# define alpha metrics  
+metrics=("shannon" "evenness" "faith_pd" "observed_features")  
+  
+# copy their tsv files into export/  
+for metric in "${metrics[@]}"; do  
+ cp $metric/*/data/alpha-diversity.tsv ${metric}.tsv  
+done
+
+# define beta metrics  
+metrics=("bray_curtis" "jaccard" "unweighted_unifrac" "weighted_unifrac")  
+# copy their txt files into export  
+for metric in "${metrics[@]}"; do  
+ cp $metric/*/data/ordination.txt ${metric}.txt  
+done
+
+```
+```
+
+```
+
+```
+
+cd /scratch/alpine/lindsval@colostate.edu/sones_16S/core_metrics_rare40k_gg2/
+unzip rarefied_table.qza
+mv 8762d88b-3f2d-4fd0-9dda-7da29a7b6ce0/ rarefied_table
+cd rarefied_table
+biom convert -i feature-table.biom -o feature_table_rare40k.tsv --to-tsv
+
+unzip bray_curtis_distance_matrix.qza
+mv c9a154c6-bd8a-456f-8c4f-dbeacbb831fe/ bray_curtis_distance_matrix
+cd bray_curtis_distance_matrix
+
+
+```
+
+#### now download these files and put them here
+
+/Users/valerielindstrom/Documents/PostDoc/data_consulting/sones_lab_16s/export
+
+#### then use R script for plotting and stats
+/Users/valerielindstrom/Documents/PostDoc/data_consulting/sones_lab_16s/figures/alpha_beta_taxa_plots.R

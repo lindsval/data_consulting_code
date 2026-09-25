@@ -862,34 +862,25 @@ perl /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/c
 
 SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
-
 CONTIG_SCRIPT="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl"
-
 # number of samples to run at once
 MAX_JOBS=5
-
 while read SAMPLE; do
   (
     CONTIGS="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/final.contigs.fa"
     OUTFILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_out/${SAMPLE}_final.contigs_STATS.txt"
-
     if [[ -f "$CONTIGS" ]]; then
       echo "Running contig stats for $SAMPLE"
-
       perl "$CONTIG_SCRIPT" "$CONTIGS" > "$OUTFILE"
-
     else
       echo "Missing contigs file for $SAMPLE" >&2
     fi
   ) &
-
   # limit number of concurrent jobs
   if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
     wait -n
   fi
-
 done < "$SAMPLE_LIST"
-
 wait
 ```
 
@@ -910,11 +901,9 @@ wait
 #SBATCH --error=slurm_output/contig_stats_%j.err
 
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
-
 bash 08_contig_stats_loop.sh
 ```
 08_contig_stats.sh
-
 Submitted batch job 25359926
 
 ### Check this ran for all samples
@@ -2605,7 +2594,6 @@ Submitted batch job 28260568
 Then in globus, just have to copy over that whole directory 
 
 #### after transfer i will delete all the duplicated flies from the transfer dir on my Alpine to save space
-
 
 ## Test the binning on one sample first with new changes: 
 
@@ -4759,15 +4747,15 @@ done
 ```
 
 
-## CoAssembly with IDBA-UD- wont run with looping, try individual sample at a time -still OOM, wait to do this until we know that IDBA individual assemblies will actually produce more bins... 
+## CoAssembly with IDBA-UD- wont run with looping, try individual sample at a time -still OOM, wait to do this until we know that IDBA individual assemblies will actually produce more bins... try again sept 10 with increased mem to 2k G (suggested by prudhvi)
 
 ```
 #!/bin/bash
 #SBATCH --job-name=idba_coA_DelugeRhizo
 #SBATCH --nodes=1  
 #SBATCH --ntasks=1  
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=600G
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=2000G
 #SBATCH --time=160:00:00
 #SBATCH --qos=mem-long
 #SBATCH --mail-type=ALL
@@ -4807,11 +4795,11 @@ fi
 ```
 
 idba_coA_DelugeRhizo.sh
-Submitted batch job 31233724
+Submitted batch job 31233724- this job failed by OOM when i requested 600G 
 
-
-
-
+try again with 2000G
+sbatch idba_coA_DelugeRhizo.sh
+Submitted batch job 32370814
 
 
 #### meeting with Kayla monday aug 3 to discuss low binning, looks like my individual megahit assembly was purged from Alpine, rerunning under a new megahit output dir call meaghit_out2, but first need to retransfer the bbduk trimmed files back to the original folder.
@@ -4836,7 +4824,7 @@ done < "${BASE}/sample_list.txt"
 
 #### sample bbduk files are moved back to their sample directory (e.g. /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/DroughtDeluge_Rhizo_Pre_8/processed_reads)
 
-## rerun megahit on all samples since it was purged
+## ~={red}rerun megahit on all samples since it was purged=~
 
 ```
 #!/bin/bash
@@ -4904,7 +4892,7 @@ bash 07_megahit_individual_assembly_loop.sh
 ```
 07_megahit_individual_assembly.sh
 Submitted batch job 30667559 - this failed for some sampes as i ran out of memory/storage on my alpine account so it needs to rerun once my request for more storage is fulfilled
-
+32980354 - running again now spet 24
 ### Check all samples assembled- 
 ```
 #check they were all run
@@ -4922,7 +4910,7 @@ echo $count
 
 
 edit code below to be megahit_out2
-### run contig_stats on all megahit 2 assemblies
+### ~={red}run contig_stats on all megahit 2 assemblie=~s
 
 ```
 #!/bin/bash
@@ -5135,6 +5123,7 @@ Overall, kayla thinks the reason we’re getting a low number of bins is becau
 
 9. If missing most abundant bug, could do 10% sub assembly to get most abundance bug (this works because sometime if there are too many reads from the same thing, the assembly gets confused and you have to actually take down the number of reads you use for assembly in order for the contigs to properly stitch together.
 10. Finally, you can try a subtractive assembly of the coassemly, uses the unmapped reads. unmapped should be 99%
+
 
 #### install singleM
 ```
@@ -5401,7 +5390,7 @@ awk 'FNR==1 && NR!=1 {next} {print}' \
 echo "Combined table written to $OUTFILE"
 ```
 
-#### 2. Make genome db of the 95%id mapped MAGs and map reads back to DB to see % reads mapped (if around 20% that is normal for soils)
+## Make genome db of the 95%id mapped MAGs and map reads back to DB to see % reads mapped (if around 20% that is normal for soils)
 
 #### 2a. dereplicate the M/HQ MAGs
 
@@ -5416,7 +5405,7 @@ dRep check_dependencies
 
 ```
 
-#### Run dRep on the M/HQ database from the checkM 95% mapping ID database
+## Run dRep on the M/HQ database from the checkM 95% mapping ID database
 ```
 #!/bin/bash
 #SBATCH --job-name=dRep
@@ -5450,7 +5439,7 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs
 ```
 
 
-#### 2b. rename the bin headers to match dram naming style where the scaffolds are now named with the bin name appended at the beginning
+## rename the bin headers to match dram naming style where the scaffolds are now named with the bin name appended at the beginning
 ```
 #!/bin/bash
 INPUT_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins/dereplicated_genomes"
@@ -5479,7 +5468,7 @@ bash rename_bins_like_dram.sh
 ```
 ^done 
 
-#### 2c. Install gtdbk-tk - requires large db so installing into scratch - Release 11-RS232 (15th April 2026)
+## Install gtdbk-tk - requires large db so installing into scratch - Release 11-RS232 (15th April 2026)
 ```
 acompile --ntasks=4 --time=03:00:00
 module load miniforge
@@ -5541,7 +5530,7 @@ Verify
 gtdbtk check_install #everything looks good
 ```
 
-### Run gtdb on dRepped MAGs
+## Run gtdb on dRepped MAGs
 ```
 #!/bin/bash
 #SBATCH --job-name=gtdbtk
@@ -5566,6 +5555,7 @@ gtdbtk classify_wf \
 ```
 sbatch `gtdb.sh`
 Submitted batch job 31107048
+
 ### 2d. Concatenate MAG database and map concatenated reads metagenomic reads
 ```
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins/dereplicated_genomes/genome_renamed
@@ -5578,7 +5568,7 @@ cat *fa > cat_MAGs_dRep.fa
 #!/bin/bash
 #SBATCH --job-name=concat_reads
 #SBATCH --partition=acpu
-#SBATCH --qos=cpu-normal
+#SBATCH --qos=c
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=12:00:00
@@ -5643,7 +5633,7 @@ see file  "/Users/valerielindstrom/Documents/PostDoc/data_consulting/roberts_met
 
 
 
-### Run dRep again on the M/HQ database from the checkM 95% mapping ID database, this includes the new IDBA bins so starting with the 151 bins
+## Run dRep again on the M/HQ database from the checkM 95% mapping ID database, this includes the new IDBA bins so starting with the 151 bins
 ```
 #!/bin/bash
 #SBATCH --job-name=dRep_151
@@ -5678,42 +5668,68 @@ cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs
 ```
 
 
-### Run DRAM on current bins so chance can get started-test install to send to VT
+## Install DRAM 1.5 on Alpine
 
 ```
 
+cd /projects/lindsval@colostate.edu
+ainteractive --ntasks=4 --time=01:00:00 --partition=acpu --qos=cpu-normal
+module purge
 
-cd /scratch/alpine/$USER
-wget https://raw.githubusercontent.com/BortonWrightonLabs/DRAM/v1.5.0/environment.yaml
-module load miniforge
-mamba env create -n test_dram_mamba -f environment.yaml
-mamba activate test_dram_mamba
+module load anaconda
+
+wget https://raw.githubusercontent.com/WrightonLabCSU/DRAM/master/environment.yaml
+
+conda config --set solver libmamba
+
+#create env, this took about 15 mins
+time conda env create -f environment.yaml -n test_dram_again_sept232026
+
+conda activate test_dram_again_sept232026
 
 ```
 
 ### once the conda env is created, some manual changes need to happen before we can set up: 
 ```
-# go here (projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_mamba/bin/DRAM-setup.py) and change the name of the file from DRAM-setup.py to DRAM-setup-original.py
-# then upload the version of DRAM-setup.py i gave you, put it in your respective bin directory (mine looks like: projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_mamba/bin/DRAM-setup.py)
-# change the path in the first line to your projects path
-## eg. chagne from #!/projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_mamba/bin/python to #!/projects/YOUR USERNAME/software/anaconda/envs/YOUR ENV/bin/python
+# go here (projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_again_sept232026/bin/DRAM-setup.py) and change the name of the file from DRAM-setup.py to DRAM-setup-original.py
 
-chmod +x /projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_mamba/bin/DRAM-setup.py
+# then upload the version of DRAM-setup.py i gave you, put it in your respective bin directory (mine looks like: projects/lindsval@colostate.edu/software/anaconda/envs/test_install_DRAM_v1.5.0_sept2026/bin/DRAM-setup.py)
 
-#then also upload this file mag_annotator.database_processing_vog_fixed import to /projects/lindsval@colostate.edu/software/anaconda/envs/DRAM_v1.5.0_use/lib/python3.10/site-packages/mag_annotator/
+# change the path in the first line to YOUR projects path
+## eg. change from #!/projects/lindsval@colostate.edu/software/anaconda/envs/DRAM_v1.5.0_use/bin/python to #!/projects/YOUR USERNAME/software/anaconda/envs/YOUR ENV/bin/python
 
-chmod +x /projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_mamba/lib/python3.10/site-packages/mag_annotator/database_processing_vog_fixed.py
+chmod +x /projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_again_sept232026/bin/DRAM-setup.py
+
+#then also upload this file ("database_processing_vog_fixed.py") to your environment's mag_annotator folder: (eg. /projects/$USER/software/anaconda/envs/ENVIRONMENT/lib/python3.10/site-packages/mag_annotator/)
+
+#this file is from my original DRAM install /projects/lindsval@colostate.edu/software/anaconda/envs/DRAM_v1.5.0_use/lib/python3.10/site-packages/mag_annotator/
+
+chmod +x /projects/lindsval@colostate.edu/software/anaconda/envs/test_dram_again_sept232026/lib/python3.10/site-packages/mag_annotator/database_processing_vog_fixed.py
 
 #then run 
+module load anaconda
+conda activate test_dram_again_sept232026
+
+#need to downgrade the setuptools version within the DRAM environment
+pip install "setuptools<81"
+
+#copy the folder "preformatted_databases_from_kayla" to your scratch directory, then run set up
 DRAM-setup.py import_config --config_loc  /scratch/alpine/lindsval@colostate.edu/preformatted_databases_from_kayla/CONFIG
 
+#check set up worked
+DRAM-setup.py print_config
+#this should list out your database paths
+
+# run DRAM (example)
+DRAM.py annotate -i '*fa' -o  DRAM_1.5_09082026 --min_contig_size 2500 --threads 20
+DRAM.py distill -i DRAM_1.5_09082026/annotations.tsv -o DRAM_1.5_09082026/distill
+
+
 ```
 
-ughhhhh still not working, giving up and just running mags for VT using the version that works
+## Run Chance's 30 MAGs through DRAM (v1.5) yes i accidently called it 50 mags...
 
 ```
-
-
 #!/bin/bash
 #SBATCH --job-name=DRAM_50mags
 #SBATCH --partition=acpu
@@ -5765,3 +5781,230 @@ DRAM.py distill -i DRAM_1.5_09092026/annotations.tsv -o DRAM_1.5_09092026/distil
 sbatch DRAM_50mags_use.sh
 Submitted batch job 32335874
 
+## run gtdb again on the 30 mags
+```
+#!/bin/bash
+#SBATCH --job-name=gtdbtk_30bins
+#SBATCH --partition=amem
+#SBATCH --qos=mem-normal
+#SBATCH --ntasks=48
+#SBATCH --time=12:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --nodes=1
+#SBATCH --output=slurm_output/gtdbtk_30bins_%j.out
+#SBATCH --error=slurm_output/gtdbtk_30bins_%j.err
+
+module load miniforge
+mamba activate gtdbtk-2.7.2
+
+gtdbtk classify_wf \
+    --genome_dir /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes \
+    --extension fa \
+    --out_dir /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins \
+    --cpus 48
+```
+
+sbatch gtdb.sh
+Submitted batch job 32373200
+
+
+make it readable for excel
+```
+cp /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins/gtdbtk.ar53.summary.tsv \
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins/gtdbtk_ar53_summary_for_excel.tsv
+
+cp /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins/gtdbtk.bac120.summary.tsv \
+/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins/gtdbtk_bac120_summary_for_excel.tsv
+```
+
+## Build a Bowtie2 database for mapping
+
+```
+#!/bin/bash
+#SBATCH --job-name=bowtie2_build_db
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
+#SBATCH --time=12:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --output=slurm_output/bowtie2_build_db_%j.out
+#SBATCH --error=slurm_output/bowtie2_build_db_%j.err
+
+module purge
+module load anaconda
+module load bowtie2
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes
+
+# make directory for bowtie database and build it using scaffolds.fna dram file 
+mkdir bowtie_DB
+cd bowtie_DB
+
+#build a database of scaffolds from the dram scaffolds file
+bowtie2-build ../DRAM_1.5_09092026/scaffolds.fna 30_MAG_DB --threads 16
+```
+sbatch bowtie_build_db.sh
+Submitted batch job 32974242
+DONE
+## map trimmed metagenome reads to bowtie database
+
+
+```
+#!/bin/bash
+#SBATCH --job-name=bowtie2_align
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=240G
+#SBATCH --time=23:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/bowtie2_align_db_%j.out
+#SBATCH --error=slurm_output/bowtie2_align_db_%j.err
+
+
+module purge
+module load anaconda
+module load bowtie2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
+
+while read -r SAMPLE
+do
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+
+    bowtie2 \
+        -D 10 \
+        -R 2 \
+        -N 1 \
+        -L 22 \
+        -i S,0,2.50 \
+        -p 64 \
+        -x "$BOWTIE_DB" \
+        -S "${BOWTIE_DB}/${SAMPLE}_mapped_99perMAGs.sam" \
+        -1 "$R1" \
+        -2 "$R2"
+
+done < "$SAMPLE_LIST"
+```
+
+sbatch bowtie_align.sh
+Submitted batch job 32974304
+
+
+## Run coverM for abundances 
+#### install coverM
+```
+### install coverM (which also installs samtools)
+# https://github.com/wwood/CoverM?tab=readme-ov-file
+conda create -n coverm 
+conda activate coverm
+conda install --channel bioconda coverm
+coverm --version 
+
+module load anaconda
+conda activate coverm
+```
+
+
+
+## Run DRAM on just genes
+
+```
+#!/bin/bash
+#SBATCH --job-name=DRAM_genes
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=20
+#SBATCH --time=23:30:00
+#SBATCH --nodes=1
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/DRAM_genes_%j.out
+#SBATCH --error=slurm_output/DRAM_genes_%j.err 
+
+
+module load anaconda
+conda activate test_dram_again_sept232026
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes
+
+DRAM.py annotate_genes \
+-i /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/DRAM_1.5_09092026/genes.faa \
+-o ../DRAM_1.5_total_genes \
+--threads 20
+
+DRAM.py distill \
+-i DRAM_1.5_total_genes/annotations.tsv \
+-o DRAM_1.5_total_genes/distill
+```
+DRAM_genes.sh
+Submitted batch job 32973703
+
+
+
+## Try a 25% subassembly
+This will take a random subset of 25% of the reads from each sample and we will do another assembly to see if that adds bins. 
+
+```
+#via globus command line, i need to transfer back the processed reads to Alpine.
+#will create a new directory on Globus to copy the trimmed files to and then copy just that folder back to Alpine
+```
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+MAX_JOBS=5
+
+while read SAMPLE; do
+  (
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+    SUBDIR="${BASE_DIR}/${SAMPLE}/processed_reads/25pcnt"
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt"
+    R1_25="${SUBDIR}/${SAMPLE}_R1_bbduktrimmed_25pcnt.fastq"
+    R2_25="${SUBDIR}/${SAMPLE}_R2_bbduktrimmed_25pcnt.fastq"
+
+    if [[ -f "$R1" && -f "$R2" ]]; then
+      echo "Creating 25% subset for $SAMPLE"
+      mkdir -p "$SUBDIR"
+      reformat.sh in1="$R1" in2="$R2" out1="$R1_25" out2="$R2_25" samplerate=0.25 sampleseed=1234
+
+      echo "Running MEGAHIT for $SAMPLE"
+      megahit -1 "$R1_25" -2 "$R2_25" --k-min 31 --k-max 121 --k-step 10 -m 0.4 -t 10 -o "$OUTDIR"
+    else
+      echo "Missing reads for $SAMPLE" >&2
+    fi
+  ) &
+
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then wait -n; fi
+done < "$SAMPLE_LIST"
+
+wait
+
+```
+
+
+
+## Try the iterative assembly from the unmapped reads - fix
+
+```
+#map to MQ and HQ MAG database to get the unmapped reads  
+bbmap.sh -Xmx48G threads=20 overwrite=t ref=MQ_HQ_genome_db.fa in1=<readsname>_R1_trimmed.fastq in2=<readsname>_R2_trimmed.fastq outu1=<readsname>_R1_trimmed_unmapped.fastq outu2=<readsname>_R2_trimmed_unmapped.fastq semiperfectmode=t
+
+#coassemble to unmapped reads  
+megahit -1 <readsname>_R1_trimmed_unmapped.fastq -2 <readsname>_R2_trimmed_unmapped.fastq  --k-min 31 --k-max 121 --k-step 10 --mem-flag 1 -m 429496729600 -t 20
+
+outM gives the mapped reads
+
+outU gives the unmapped reads
+```
