@@ -5817,7 +5817,8 @@ cp /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs
 /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/gtdbtk_30bins/gtdbtk_bac120_summary_for_excel.tsv
 ```
 
-## Build a Bowtie2 database for mapping
+## Get MAG relative abundances using coverM
+### Build a Bowtie2 database for mapping
 
 ```
 #!/bin/bash
@@ -5940,7 +5941,7 @@ done < "$SAMPLE_LIST"
 sbatch sam2bam_filter_sort.sh
 Submitted batch job 33113523, RUNNING
 
-## Run coverM for abundances 
+### Run coverM for abundances 
 #### install coverM (0.7.0)
 ```
 ### install coverM (which also installs samtools)
@@ -5955,7 +5956,7 @@ conda activate coverm
 ```
 
 
-#### Run coverM
+### Run coverM
 
 ```
 #!/bin/bash
