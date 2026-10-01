@@ -4839,7 +4839,7 @@ while read SAMPLE; do
   (
     R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
     R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
-    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out2"
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
 
     # check files exist
     if [[ -f "$R1" && -f "$R2" ]]; then
@@ -4892,8 +4892,9 @@ bash 07_megahit_individual_assembly_loop.sh
 ```
 07_megahit_individual_assembly.sh
 Submitted batch job 30667559 - this failed for some sampes as i ran out of memory/storage on my alpine account so it needs to rerun once my request for more storage is fulfilled
-32980354 - running again now spet 24
-### Check all samples assembled- 
+33155617 - running again now sept 29
+Note that i just deleted the megahit_out and megahit_out2 folders (they were empty anyways) and kept the megahit_out naming scheme
+### ~={red}Check all samples assembled- =~
 ```
 #check they were all run
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/
@@ -4908,9 +4909,7 @@ echo $count
 
 ```
 
-
-edit code below to be megahit_out2
-### ~={red}run contig_stats on all megahit 2 assemblie=~s
+### ~={red}run contig_stats on all megahit assemblie=~s
 
 ```
 #!/bin/bash
@@ -5850,7 +5849,7 @@ bowtie2-build ../DRAM_1.5_09092026/scaffolds.fna 30_MAG_DB --threads 16
 sbatch bowtie_build_db.sh
 Submitted batch job 32974242
 DONE
-## map trimmed metagenome reads to bowtie database
+### map trimmed metagenome reads to bowtie database
 
 
 ```
@@ -5877,6 +5876,7 @@ SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_l
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
 BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
 
+
 while read -r SAMPLE
 do
     R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
@@ -5889,7 +5889,7 @@ do
         -L 22 \
         -i S,0,2.50 \
         -p 64 \
-        -x "$BOWTIE_DB" \
+        -x "${BOWTIE_DB}/30_MAG_DB" \
         -S "${BOWTIE_DB}/${SAMPLE}_mapped_99perMAGs.sam" \
         -1 "$R1" \
         -2 "$R2"
@@ -5898,11 +5898,50 @@ done < "$SAMPLE_LIST"
 ```
 
 sbatch bowtie_align.sh
-Submitted batch job 32974304
+Submitted batch job 33099675
+DONE
 
+### Convert SAM to BAM
+
+
+```
+#!/bin/bash
+#SBATCH --job-name=sam2bam_filter_sort
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=240G
+#SBATCH --time=23:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/sam2bam_filter_sort_%j.out
+#SBATCH --error=slurm_output/sam2bam_filter_sort_%j.err
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
+
+module purge
+module load anaconda
+module load samtools
+module load bbtools
+
+while read -r SAMPLE
+do
+samtools view -@ 7 -bS "${BOWTIE_DB}/${SAMPLE}_mapped_99perMAGs.sam" > "${BOWTIE_DB}/${SAMPLE}_mapped_99perMAGs.bam"
+
+reformat.sh in="${BOWTIE_DB}/${SAMPLE}_mapped_99perMAGs.bam" out="${BOWTIE_DB}/${SAMPLE}_95peridmapped_99perMAGs.bam" minidfilter=0.95
+
+samtools sort -@ 7 -o "${BOWTIE_DB}/${SAMPLE}_95peridmapped_99perMAGs_POSSORT.bam" "${BOWTIE_DB}/${SAMPLE}_95peridmapped_99perMAGs.bam"
+done < "$SAMPLE_LIST"
+```
+sbatch sam2bam_filter_sort.sh
+Submitted batch job 33113523, RUNNING
 
 ## Run coverM for abundances 
-#### install coverM
+#### install coverM (0.7.0)
 ```
 ### install coverM (which also installs samtools)
 # https://github.com/wwood/CoverM?tab=readme-ov-file
@@ -5915,6 +5954,79 @@ module load anaconda
 conda activate coverm
 ```
 
+
+#### Run coverM
+
+```
+#!/bin/bash
+#SBATCH --job-name=coverM
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=15
+#SBATCH --mem=240G
+#SBATCH --time=23:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coverM_%j.out
+#SBATCH --error=slurm_output/coverM_%j.err
+
+
+module load anaconda
+conda activate coverm
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
+GENOME_DIR="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes"
+OUT_DIR="${BOWTIE_DB}/coverM_tpm"
+
+mkdir -p "$OUT_DIR"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--threads 15 \
+--min-covered-fraction 0 \
+-m tpm \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_tpm.txt" \
+&> "${OUT_DIR}/tpm_stats.txt"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+-m trimmed_mean \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_trimmed_mean.txt" \
+&> "${OUT_DIR}/trimmed_mean_stats.txt"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+-m count \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_count.txt" \
+&> "${OUT_DIR}/count_stats.txt"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+-m reads_per_base \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_reads_per_base.txt" \
+&> "${OUT_DIR}/reads_per_base_stats.txt"
+```
 
 
 ## Run DRAM on just genes
@@ -5952,59 +6064,660 @@ Submitted batch job 32973703
 
 
 
-## Try a 25% subassembly
+## ~={red}Try a 25% subassembly=~
 This will take a random subset of 25% of the reads from each sample and we will do another assembly to see if that adds bins. 
 
 ```
-#via globus command line, i need to transfer back the processed reads to Alpine.
-#will create a new directory on Globus to copy the trimmed files to and then copy just that folder back to Alpine
+# via globus command line, i need to transfer back the processed reads to Alpine.
+# will create a new directory on Globus to copy the trimmed files to and then copy just that folder back to Alpine
+# see SOP here  '/Users/valerielindstrom/Documents/PostDoc/SOPs/Access Globus via command line.docx'
+# then on Alpine, move those process reads back into the sample dirs: eg ${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq
 ```
 
 ```
-SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
-BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+#!/bin/bash
+#SBATCH --job-name=megahit_25per_subassembly
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=64
+#SBATCH --qos=cpu-normal  
+#SBATCH --partition=acpu
+#SBATCH --time=23:30:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahit_25per_subassembly_%j.out
+#SBATCH --error=slurm_output/megahit_25per_subassembly_%j.err
+
+module load anaconda  
+module load bbtools  
+conda activate megahit
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"  
 MAX_JOBS=5
 
-while read SAMPLE; do
-  (
-    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
-    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
-    SUBDIR="${BASE_DIR}/${SAMPLE}/processed_reads/25pcnt"
-    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt"
-    R1_25="${SUBDIR}/${SAMPLE}_R1_bbduktrimmed_25pcnt.fastq"
-    R2_25="${SUBDIR}/${SAMPLE}_R2_bbduktrimmed_25pcnt.fastq"
+while read -r SAMPLE; do  
+(  
+R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"  
+R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"  
+SUBDIR="${BASE_DIR}/${SAMPLE}/processed_reads/25pcnt"  
+OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt"  
+R1_25="${SUBDIR}/${SAMPLE}_R1_bbduktrimmed_25pcnt.fastq"  
+R2_25="${SUBDIR}/${SAMPLE}_R2_bbduktrimmed_25pcnt.fastq"
 
-    if [[ -f "$R1" && -f "$R2" ]]; then
-      echo "Creating 25% subset for $SAMPLE"
-      mkdir -p "$SUBDIR"
-      reformat.sh in1="$R1" in2="$R2" out1="$R1_25" out2="$R2_25" samplerate=0.25 sampleseed=1234
+if [[ -f "$R1" && -f "$R2" ]]; then  
+echo "Creating 25% subset for $SAMPLE"  
+mkdir -p "$SUBDIR"  
+reformat.sh in1="$R1" in2="$R2" out1="$R1_25" out2="$R2_25" samplerate=0.25 sampleseed=1234
 
-      echo "Running MEGAHIT for $SAMPLE"
-      megahit -1 "$R1_25" -2 "$R2_25" --k-min 31 --k-max 121 --k-step 10 -m 0.4 -t 10 -o "$OUTDIR"
-    else
-      echo "Missing reads for $SAMPLE" >&2
-    fi
-  ) &
+echo "Running MEGAHIT for $SAMPLE"  
+megahit -1 "$R1_25" -2 "$R2_25" --k-min 31 --k-max 121 --k-step 10 -m 0.4 -t 10 -o "$OUTDIR"  
+else  
+echo "Missing reads for $SAMPLE" >&2  
+fi  
+) &
 
-  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then wait -n; fi
+if [ "$(jobs -r -p | wc -l)" -ge "$MAX_JOBS" ]; then  
+wait -n  
+fi  
 done < "$SAMPLE_LIST"
 
 wait
 
 ```
-
-
-
-## Try the iterative assembly from the unmapped reads - fix
+sbatch megahit_25per_subassembly.sh
+Submitted batch job 33102670, done
+### run contig_stats on megahit_25per_subassembly
 
 ```
+#!/bin/bash
+#SBATCH --job-name=contig_stats_megahit_25per_subassembly
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=25 
+#SBATCH --qos=cpu-normal
+#SBATCH --time=04:00:00
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/contig_stats_megahit_25per_subassembly_%j.out
+#SBATCH --error=slurm_output/contig_stats_megahit_25per_subassembly_%j.err
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/slurm
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+CONTIG_SCRIPT="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/contig_stats_full.pl"
+
+# number of samples to run at once
+MAX_JOBS=5
+while read SAMPLE; do
+  (
+    CONTIGS="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt/final.contigs.fa"
+    OUTFILE="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt/${SAMPLE}_final.contigs_STATS.txt"
+    if [[ -f "$CONTIGS" ]]; then
+      echo "Running contig stats for $SAMPLE"
+      perl "$CONTIG_SCRIPT" "$CONTIGS" > "$OUTFILE"
+    else
+      echo "Missing contigs file for $SAMPLE" >&2
+    fi
+  ) &
+  # limit number of concurrent jobs
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+done < "$SAMPLE_LIST"
+wait
+```
+08_contig_stats_megahit_25per.sh
+Submitted batch job 33155816, done
+
+### Check this ran for all samples
+
+```
+#check 
+
+count=0  
+while read sample; do  
+compgen -G "${sample}/assembly/megahit_25pcnt/*_final.contigs_STATS.txt" > /dev/null &&((count++))  
+done < sample_list.txt  
+  
+echo $count
+#88
+
+#good!
+```
+
+
+### Combine all contig stats files
+
+```
+#!/bin/bash
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+SAMPLE_LIST="$BASE_DIR/sample_list.txt"
+OUTFILE="$BASE_DIR/megahit_25per_subassembly_contig_stats_summary.txt"
+
+echo -e "Sample\t0-100_reads\t0-100_reads_pct\t0-100_bps\t0-100_bps_pct\t100-500_reads\t100-500_reads_pct\t100-500_bps\t100-500_bps_pct\t500-1000_reads\t500-1000_reads_pct\t500-1000_bps\t500-1000_bps_pct\t1000-5000_reads\t1000-5000_reads_pct\t1000-5000_bps\t1000-5000_bps_pct\t5000-10000_reads\t5000-10000_reads_pct\t5000-10000_bps\t5000-10000_bps_pct\t10000-20000_reads\t10000-20000_reads_pct\t10000-20000_bps\t10000-20000_bps_pct\t20000-50000_reads\t20000-50000_reads_pct\t20000-50000_bps\t20000-50000_bps_pct\t50000-100000_reads\t50000-100000_reads_pct\t50000-100000_bps\t50000-100000_bps_pct\t100000-500000_reads\t100000-500000_reads_pct\t100000-500000_bps\t100000-500000_bps_pct\t500000+_reads\t500000+_reads_pct\t500000+_bps\t500000+_bps_pct\tTotal_sequences\tTotal_bps\tAvg_length\tN50" > "$OUTFILE"
+
+while read SAMPLE; do
+  FILE="$BASE_DIR/$SAMPLE/assembly/megahit_25pcnt/${SAMPLE}_final.contigs_STATS.txt"
+  [[ -f "$FILE" ]] || { echo "Missing stats for $SAMPLE" >&2; continue; }
+
+  awk -v sample="$SAMPLE" '
+  BEGIN { OFS="\t" }
+  /Length distribution/ {dist=1; next}
+  /General Information/ {dist=0; gen=1; next}
+  dist && /^[[:space:]]*[0-9]/ {
+    if (match($0,/([0-9]+-[0-9]+|\+):/,m) && match($0,/([0-9]+)[[:space:]]+\(([0-9.]+)%\)/,r)) {
+      range=m[1]; reads=r[1]; reads_pct=r[2]
+      rest=substr($0,RSTART+RLENGTH)
+      if (match(rest,/([0-9]+)[[:space:]]+\(([0-9.]+)%\)/,b))
+        data[range]=reads"\t"reads_pct"\t"b[1]"\t"b[2]
+    }
+  }
+  gen && /Total number of sequences/ {total_seq=$5}
+  gen && /Total number of bps/ {total_bps=$5}
+  gen && /Average sequence length/ {avg_len=$4}
+  gen && /^N50/ {n50=$2}
+  END {
+    split("0-100 100-500 500-1000 1000-5000 5000-10000 10000-20000 20000-50000 50000-100000 100000-500000 500000+",ranges)
+    printf sample
+    for (i=1;i<=10;i++) printf "\t%s",((ranges[i] in data)?data[ranges[i]]:"NA\tNA\tNA\tNA")
+    printf "\t%s\t%s\t%s\t%s\n",total_seq,total_bps,avg_len,n50
+  }' "$FILE" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+
+echo "Done! Output written to: $OUTFILE"
+```
+bash 08a_combine_stats_megahit_25per_subassembly.sh
+done
+
+move this file to here: `/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/contig_stats_summary_all_assembly_types`
+
+aftering taking a look at the summary file, there is only ~2.5% of reads in the 1k-5k range, thats even worse than the original megahit which was around 5%...
+### pullseqs for individual assembly on megahit_25pcnt
+
+```
+#!/bin/bash
+#SBATCH --job-name=pullseq_filter_indiv_assembly_megahit_25pcnt
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --time=23:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=cpu-normal
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/pullseq_filter_indiv_assembly_megahit_25pcnt_%j.out
+#SBATCH --error=slurm_output/pullseq_filter_indiv_assembly_megahit_25pcnt_%j.err
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+PULLSEQ="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/custom_scripts/pullseq/build/src/pullseq"
+
+while read SAMPLE; do
+  OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt"
+  INPUT="${OUTDIR}/final.contigs.fa"
+  OUTPUT="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+
+  echo "Processing sample: $SAMPLE"
+  if [ -f "$INPUT" ]; then
+    "$PULLSEQ" -i "$INPUT" -m 2500 > "$OUTPUT"
+    echo " Output written to: $OUTPUT"
+  else
+    echo " WARNING: $INPUT not found, skipping"
+  fi
+done < "$SAMPLE_LIST"
+echo "All samples processed."
+```
+12_pullseqs_2500_individual_assembly_megahit_25pcnt.sh
+Submitted batch job 33158623, done
+
+### ~={red}Individual assembly mapping for megahit_25pcnt=~
+- uses the contigs as the reference to get coverage
+- compares every paired end read from every sample to see where the reads map to the contigs (gives position information)
+
+```
+#!/bin/bash
+#SBATCH --job-name=bbmap_indiv_Assembly_megahit_25pcnt
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=06:00:00
+#SBATCH --mem=50gb
+#SBATCH --qos=cpu-normal
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/bbmap_indiv_Assembly_megahit_25pcnt_%j.out
+#SBATCH --error=slurm_output/bbmap_indiv_Assembly_megahit_25pcnt_%j.err
+
+module load anaconda
+conda activate bbmap
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"   
+
+while read SAMPLE; do
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_25pcnt"
+    REF="${OUTDIR}/${SAMPLE}_final.contigs_2500.fa"
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$REF" && -f "$R1" && -f "$R2" ]]; then
+        bbmap.sh \
+            -Xmx48G \
+            threads=20 \
+            overwrite=t \
+            ref="$REF" \
+            in1="$R1" \
+            in2="$R2" \
+            out="$OUTPUT"
+        echo "Mapping complete for: $SAMPLE"
+    else
+        echo "WARNING: Missing files for $SAMPLE"
+    fi
+done < "$SAMPLE_LIST"
+echo "All samples processed."
+```
+sbatch 13_bbmap_indiv_Assembly_megahit_25pcnt.sh
+Submitted batch job 33208253, RUNNING
+
+### ~={red}Convert SAM to BAM files, sort, filter megahit_25pcnt=~
+- BAM file is sorted based on its position in the reference, as determined by its alignment
+
+```
+#!/bin/bash  
+#SBATCH --job-name=indiv_sort_megahit_25pcnt
+#SBATCH --nodes=1  
+#SBATCH --cpus-per-task=20  
+#SBATCH --time=48:00:00  
+#SBATCH --mem=20gb  
+#SBATCH --qos=cpu-long
+#SBATCH --partition=acpu 
+#SBATCH --mail-type=ALL  
+#SBATCH --mail-user=lindsval@colostate.edu  
+#SBATCH --output=slurm_output/indiv_sort_megahit_25pcnt_%j.out  
+#SBATCH --error=slurm_output/indiv_sort_megahit_25pcnt_%j.err  
+
+module load samtools  
+  
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"  
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"  
+  
+while read SAMPLE; do
+
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    OUTPUT="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sam"
+
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$OUTPUT" ]]; then
+        samtools view -@ 20 -bS "$OUTPUT" \
+            > "${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.bam"
+
+        samtools sort -@ 20 \
+            -T "${MAPPED_DIR}/${SAMPLE}_tmp_sort" \
+            -o "${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sorted.bam" \
+            "${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.bam"
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing SAM file: $OUTPUT"
+    fi
+done < "$SAMPLE_LIST"
+echo "All samples complete."
+```
+
+14_indiv_sort_megahit_25pcnt.sh
+Submitted batch job 
+
+
+### ~={red}Reformat individual assembly files megahit_25pcnt at 95% id=~
+BBTools reformat.sh script will filter to keep only the highest quality matches
+
+```
+
+#!/bin/bash
+#SBATCH --job-name=indiv_reformat_megahit_25pcnt
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=20
+#SBATCH --time=04:00:00
+#SBATCH --mem=120gb
+#SBATCH --qos=cpu-normal
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_reformat_megahit_25pcnt_%j.out
+#SBATCH --error=slurm_output/indiv_reformat_megahit_25pcnt_%j.err
+
+module load anaconda  
+module load samtools
+module load bbtools
+conda activate bbmap
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read SAMPLE; do
+    MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
+    INPUT_BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sorted.bam.bam"
+OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped95per.sorted.bam"
+    echo "Processing sample: $SAMPLE"
+    if [[ -f "$INPUT_BAM" ]]; then
+        reformat.sh \
+            -Xmx100g \
+            threads=20 \
+            minidfilter=0.95 \
+            in="$INPUT_BAM" \
+            out="$OUTPUT_BAM" \
+            pairedonly=t \
+            primaryonly=t \
+            overwrite=true
+        echo "Finished: $SAMPLE"
+    else
+        echo "Missing BAM file: $INPUT_BAM"
+    fi
+done < "$SAMPLE_LIST"
+echo "All samples complete."
+
+```
+15_indiv_reformat_megahit_25pcnt.sh
+Submitted batch job 
+
+### ~={red}Individual assembly binning megahit_25pcnt=~
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_metabat_bin_megahit_25pcnt
+#SBATCH --nodes=1
+#SBATCH --ntasks=6
+#SBATCH --time=23:00:00
+#SBATCH --qos=cpu-normal
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_metabat_bin_megahit_25pcnt_%j.out
+#SBATCH --error=slurm_output/indiv_metabat_bin_megahit_25pcnt_%j.err
+
+module load anaconda
+conda activate metabat2
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while IFS= read -r SAMPLE || [[ -n "$SAMPLE" ]]; do
+    [[ -z "$SAMPLE" || "$SAMPLE" == \#* ]] && continue
+    SAMPLE_DIR="${BASE_DIR}/${SAMPLE}"
+    ASSEMBLY_DIR="${SAMPLE_DIR}/assembly/megahit_25pcnt"
+    MAPPED_DIR="${SAMPLE_DIR}/mapped_reads"
+    CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_final.contigs_2500.fa"
+    BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped95per.sorted.bam"
+    OUT_DIR="${SAMPLE_DIR}/metabat_bins_megahit_25pcnt"
+    mkdir -p "$OUT_DIR"
+    if [[ ! -f "$CONTIGS" || ! -f "$BAM" ]]; then
+        echo "Skipping $SAMPLE (missing input)"
+        continue
+    fi
+    echo "Processing $SAMPLE"
+    DEPTH="${ASSEMBLY_DIR}/depth.txt"
+    jgi_summarize_bam_contig_depths \
+        --outputDepth "$DEPTH" \
+        "$BAM"
+    metabat2 \
+        -i "$CONTIGS" \
+        -a "$DEPTH" \
+        -o "$OUT_DIR/${SAMPLE}_bin" \
+        -t 6
+done < "$SAMPLE_LIST"
+echo "All samples complete."
+
+```
+
+16_indiv_metabat_bin_megahit_25pcnt.sh
+Submitted batch job 
+
+### ~={red}Run CheckM for individual assembly megahit_25pcnt bins =~
+```
+#!/bin/bash
+#SBATCH --job-name=indiv_checkM_95per_megahit_25pcnt
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --time=23:00:00
+#SBATCH --qos=cpu-normal
+#SBATCH --partition=acpu
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/indiv_checkM_95per_megahit_25pcnt_%j.out
+#SBATCH --error=slurm_output/indiv_checkM_95per_megahit_25pcnt_%j.err
+
+module load anaconda
+conda activate checkm
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+
+while read sample; do
+    echo "Processing ${sample}..."
+    BIN_DIR="${BASE_DIR}/${sample}/metabat_bins_megahit_25pcnt"
+    if [[ ! -d "${BIN_DIR}" ]]; then
+        echo "Skipping ${sample}: metabat_bins not found."
+        continue
+    fi
+    cd "${BIN_DIR}"
+    # Run CheckM
+    checkm lineage_wf \
+        -t 12 \
+        -x fa \
+        . \
+        checkm
+    # Generate QA table
+    checkm qa \
+        -o 2 \
+        -f checkm/results.txt \
+        --tab_table \
+        -t 12 \
+        checkm/lineage.ms \
+        checkm
+done < "${SAMPLE_LIST}"
+
+```
+18b_indiv_checkM_95per_megahit_25pcnt.sh
+Submitted batch job 30853805
+
+
+#### pull out the HQ/MQ bins 
+
+```
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/"
+OUTDIR="${BASE_DIR}/checkm_MHQ_bins_95percentID_indiv_assembly_megahit_25pcnt"
+mkdir -p "$OUTDIR"
+while read -r sample; do
+    echo "Processing ${sample}..."
+    CHECKM_FILE="${BASE_DIR}/${sample}/metabat_bins_megahit_25pcnt/checkm/results.txt"
+    OUTFILE="${OUTDIR}/${sample}_HQ_MQ_bins_checkm_95per.txt"
+    if [[ ! -f "$CHECKM_FILE" ]]; then
+        echo -e "${sample}\tNO_CHECKM_FILE" > "$OUTFILE"
+        continue
+    fi
+    echo -e "bin\tquality" > "$OUTFILE"
+    awk -F "\t" '
+    NR > 1 {
+        if ($6 >= 90 && $7 <= 5) {
+            print $1 "\tHIGH"
+        }
+        else if ($6 >= 50 && $7 <= 10) {
+            print $1 "\tMEDIUM"
+        }
+    }' "$CHECKM_FILE" >> "$OUTFILE"
+done < "$SAMPLE_LIST"
+```
+
+```
+nano extract_mqhq_bins_indiv_checkm_95per_megahit_25pcnt.sh
+chmod +x extract_mqhq_bins_indiv_checkm_95per_megahit_25pcnt.sh 
+./extract_mqhq_bins_indiv_checkm_95per_megahit_25pcnt.sh 
+```
+
+#### Count the number of bins from the indiv assembly megahit_25pcnt / checkM that were medium- or high-quality
+```
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/checkm_MHQ_bins_95percentID_indiv_assembly_megahit_25pcnt"  
+grep -h -E "HIGH|MEDIUM" ${OUTDIR}/*_HQ_MQ_bins_checkm_95per.txt | wc -l
+#54 were M/HQ
+```
+
+#### list all the M/HQ bins in 1 file
+
+```
+OUTDIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/checkm_MHQ_bins_95percentID_indiv_assembly_megahit_25pcnt"
+OUTFILE="${OUTDIR}/all_med_high_quality_bins_checkM_95percent_indiv_megahit_25pcnt.txt"
+echo -e "sample\tbin\tquality" > "$OUTFILE"
+for file in "$OUTDIR"/*_HQ_MQ_bins_checkm_95per.txt; do
+    sample=$(basename "$file" "_HQ_MQ_bins_checkm_95per.txt")
+    awk -v sample="$sample" 'NR > 1 && NF >= 2 {
+        print sample "\t" $1 "\t" $2
+    }' "$file" >> "$OUTFILE"
+done
+```
+
+#### rename the indiv_assembly_megahit_25pcnt bins so they dont overwrite the original megahit and IDBA ones
+
+```
+SRC="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+for BIN_DIR in "$SRC"/*/metabat_bins_megahit_25pcnt; do
+    [[ -d "$BIN_DIR" ]] || continue
+    for BIN in "$BIN_DIR"/*.fa; do
+        [[ -f "$BIN" ]] || continue
+        [[ "$BIN" == *_megahit_25pcnt.fa ]] && continue
+        mv "$BIN" "${BIN%.fa}_megahit_25pcnt.fa"
+    done
+done
+echo "Finished renaming bins."
+```
+
+#### move them into the Med high qual directory - add # of bins now total
+
+```
+SRC="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+LIST="${SRC}/checkm_MHQ_bins_95percentID_indiv_assembly_megahit_25pcnt/all_med_high_quality_bins_checkM_95percent_indiv_megahit_25pcnt.txt"
+DEST="${SRC}/MedHighQualityMAGs"
+#mkdir -p "$DEST"
+tail -n +2 "$LIST" | while IFS=$'\t' read -r sample bin quality; do
+    BIN="${SRC}/${sample}/metabat_bins_megahit_25pcnt/${bin}.fa"
+    if [[ -f "$BIN" ]]; then
+        cp "$BIN" "$DEST/"
+    else
+        echo "NOT FOUND: $BIN"
+    fi
+done
+```
+
+
+
+### ~={red}Run dRep again on the M/HQ database from the megahit, IDBA (individual only), and magehit 25per bins so starting with the add#  bins=~
+edit the folders to reflect number of starting bins
+```
+#!/bin/bash
+#SBATCH --job-name=dRep_NUM BINS
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=80G
+#SBATCH --time=23:00:00
+#SBATCH --nodes=1
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/dRep_151_%j.out
+#SBATCH --error=slurm_output/dRep_151_%j.err
+
+module load miniforge
+mamba activate drep
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs
+dRep dereplicate dRep_bins_151 -p 7 -comp 50 -con 10 -g ./*fa
+```
+
+dRep_151.sh 
+Submitted batch job 31764865
+#### Count number of bins before and after dereplication - 29 left after dRep
+```
+
+ls -dq *fa | wc -l
+# there were 151 M and HQ bins before dRep
+
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins/dereplicated_genomes
+# there are 29 bins after dRep...yikes...?
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## ~={red}Try the iterative assembly from the unmapped reads - fix=~
+
+```
+cd cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes
+cat *.fa > all_dereplicated_MAGs.fa
+
+```
+
+```
+#!/bin/bash
+#SBATCH --job-name=bbmap_get_unmapped_reads
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=256G
+#SBATCH --qos=cpu-normal  
+#SBATCH --partition=acpu
+#SBATCH --time=23:30:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/bbmap_get_unmapped_reads_%j.out
+#SBATCH --error=slurm_output/bbmap_get_unmapped_reads_%j.err
+
+module load anaconda  
+conda activate bbmap
+cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/unmapped_reads
+
 #map to MQ and HQ MAG database to get the unmapped reads  
-bbmap.sh -Xmx48G threads=20 overwrite=t ref=MQ_HQ_genome_db.fa in1=<readsname>_R1_trimmed.fastq in2=<readsname>_R2_trimmed.fastq outu1=<readsname>_R1_trimmed_unmapped.fastq outu2=<readsname>_R2_trimmed_unmapped.fastq semiperfectmode=t
+bbmap.sh -Xmx200G threads=32 overwrite=t ref=all_dereplicated_MAGs.fa in1=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R1_bbduktrimmed.fastq in2=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R2_bbduktrimmed.fastq outu1=concat_R1_bbduktrimmed_unmapped.fastq outu2=concat_R2_bbduktrimmed_unmapped.fastq semiperfectmode=t
 
-#coassemble to unmapped reads  
-megahit -1 <readsname>_R1_trimmed_unmapped.fastq -2 <readsname>_R2_trimmed_unmapped.fastq  --k-min 31 --k-max 121 --k-step 10 --mem-flag 1 -m 429496729600 -t 20
+```
+sbatch bbmap_get_unmapped_reads.sh
+Submitted batch job 33159431
 
-outM gives the mapped reads
+~={red}fix below...=~
 
-outU gives the unmapped reads
+```
+#!/bin/bash
+#SBATCH --job-name=megahit_unmapped_reads
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=64
+#SBATCH --qos=cpu-normal  
+#SBATCH --partition=acpu
+#SBATCH --time=23:30:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahit_unmapped_reads_%j.out
+#SBATCH --error=slurm_output/megahit_unmapped_reads_%j.err
+
+module load anaconda  
+module load bbtools  
+conda activate megahit
+
 ```
