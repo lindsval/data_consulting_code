@@ -4894,6 +4894,62 @@ bash 07_megahit_individual_assembly_loop.sh
 Submitted batch job 30667559 - this failed for some sampes as i ran out of memory/storage on my alpine account so it needs to rerun once my request for more storage is fulfilled
 33155617 - running again now sept 29
 Note that i just deleted the megahit_out and megahit_out2 folders (they were empty anyways) and kept the megahit_out naming scheme
+
+rerun on the samples that didn't finish due to timeout (from the spet 29 job)
+
+```
+#!/bin/bash
+#SBATCH --job-name=megahit
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=32
+#SBATCH --qos=cpu-long
+#SBATCH --partition=acpu
+#SBATCH --time=47:30:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/megahit_rerun2_%j.out
+#SBATCH --error=slurm_output/megahit_rerun2_%j.err
+
+module load anaconda
+conda activate megahit
+
+SAMPLE_LIST="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/sample_list.txt"
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+MAX_JOBS=3
+
+while read -r SAMPLE; do
+  (
+    R1="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R1_bbduktrimmed.fastq"
+    R2="${BASE_DIR}/${SAMPLE}/processed_reads/${SAMPLE}_R2_bbduktrimmed.fastq"
+    OUTDIR="${BASE_DIR}/${SAMPLE}/assembly/megahit_out"
+
+    if [[ -s "$OUTDIR/final.contigs.fa" ]]; then
+      echo "Skipping completed sample: $SAMPLE"
+    elif [[ -f "$R1" && -f "$R2" ]]; then
+      echo "Running MEGAHIT for $SAMPLE"
+      mkdir -p "$(dirname "$OUTDIR")"
+      megahit -1 "$R1" -2 "$R2" --k-min 31 --k-max 121 --k-step 10 -m 0.4 -t 10 -o "$OUTDIR"
+      if [[ $? -eq 0 ]]; then
+        echo "Finished MEGAHIT for $SAMPLE"
+      else
+        echo "MEGAHIT failed for $SAMPLE" >&2
+      fi
+    else
+      echo "Missing reads for $SAMPLE" >&2
+    fi
+  ) &
+
+  if [[ $(jobs -r -p | wc -l) -ge $MAX_JOBS ]]; then
+    wait -n
+  fi
+done < "$SAMPLE_LIST"
+wait
+
+```
+07_megahit_individual_assembly_rerun.sh
+Submitted batch job 33324551
+
+
 ### ~={red}Check all samples assembled- =~
 ```
 #check they were all run
@@ -5955,9 +6011,35 @@ module load anaconda
 conda activate coverm
 ```
 
+### rename the bin headers to match dram naming style where the scaffolds are now named with the bin name appended at the beginning
+```
+#!/bin/bash
+INPUT_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes"
+OUTPUT_DIR="${INPUT_DIR}/genomes_renamed"
+mkdir -p "$OUTPUT_DIR"
+for fasta in "$INPUT_DIR"/*.fa; do
+    [ -e "$fasta" ] || continue
+    filename=$(basename "$fasta")
+    bin="${filename%.fa}"
+    echo "Renaming $filename..."
+    awk -v prefix="$bin" '
+    /^>/ {
+        sub(/^>/, "")
+        print ">" prefix "_" $0
+        next
+    }
+    { print }
+    ' "$fasta" > "${OUTPUT_DIR}/${filename}"
+done
+echo "Done."
+```
+^run in CL
 
 ### Run coverM
-
+- we will run mutliple output formats just to avoid neededing to rerun coverM in the future if asked for the other outputs. for now we will use Trimmed Mean
+- Trimmed mean: It calculates the mean coverage across the contigs of a MAG, after trimming. excludes contigs with very low or very high coverage (e.g., the top and bottom 10% by default). gives average coverage value, meant to represent the "typical" coverage of that MAG in the sample. this creates your normalized data
+- note that if there is a failed job or error with coverM, it doesn't print to .out or .err, but they get saved to the <file_stats.txt files. 
+- IMPORTANT: only run coverM on a directory that contains JUST the MAGs. i think it will fail if you have other file types in the dir where coverM is running. 
 ```
 #!/bin/bash
 #SBATCH --job-name=coverM
@@ -5965,9 +6047,8 @@ conda activate coverm
 #SBATCH --qos=cpu-normal
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=15
-#SBATCH --mem=240G
-#SBATCH --time=23:00:00
+#SBATCH --cpus-per-task=6
+#SBATCH --time=02:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=lindsval@colostate.edu
 #SBATCH --output=slurm_output/coverM_%j.out
@@ -5979,8 +6060,8 @@ conda activate coverm
 
 BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
 BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
-GENOME_DIR="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes"
-OUT_DIR="${BOWTIE_DB}/coverM_tpm"
+GENOME_DIR="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/genomes_renamed"
+OUT_DIR="${GENOME_DIR}/coverM"
 
 mkdir -p "$OUT_DIR"
 
@@ -5995,6 +6076,7 @@ coverm genome \
 --output-file "${OUT_DIR}/coverm_tpm.txt" \
 &> "${OUT_DIR}/tpm_stats.txt"
 
+# ouput trimmed_mean: it is the average number of aligned reads overlapping each position after removing the most deeply and shallow-ly covered positions
 coverm genome \
 --genome-fasta-extension fa \
 --genome-fasta-directory "$GENOME_DIR" \
@@ -6017,6 +6099,7 @@ coverm genome \
 --output-file "${OUT_DIR}/coverm_count.txt" \
 &> "${OUT_DIR}/count_stats.txt"
 
+# output reads_per_base- this is the file we will start with, can use tpm but not as common these days
 coverm genome \
 --genome-fasta-extension fa \
 --genome-fasta-directory "$GENOME_DIR" \
@@ -6029,6 +6112,105 @@ coverm genome \
 &> "${OUT_DIR}/reads_per_base_stats.txt"
 ```
 
+coverM.sh
+Submitted batch job 33325665
+
+## Try coverM with --min-read-percent-identity-pair 0.97
+```
+#!/bin/bash
+#SBATCH --job-name=coverM_min75
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=02:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=lindsval@colostate.edu
+#SBATCH --output=slurm_output/coverM_min75_%j.out
+#SBATCH --error=slurm_output/coverM_min75_%j.err
+
+
+module load anaconda
+conda activate coverm
+
+BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
+BOWTIE_DB="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/bowtie_DB"
+GENOME_DIR="${BASE_DIR}/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/genomes_renamed"
+OUT_DIR="${GENOME_DIR}/coverM_min75"
+
+mkdir -p "$OUT_DIR"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--threads 15 \
+--min-covered-fraction 0 \
+-m tpm \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_tpm.txt" \
+&> "${OUT_DIR}/tpm_stats.txt"
+
+# ouput trimmed_mean: it is the average number of aligned reads overlapping each position after removing the most deeply and shallow-ly covered positions
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+--min-read-percent-identity-pair 0.97 \
+--proper-pairs-only \
+-m trimmed_mean \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_trimmed_mean.txt" \
+&> "${OUT_DIR}/trimmed_mean_stats.txt"
+
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+--min-read-percent-identity-pair 0.97 \
+--proper-pairs-only \
+-m count \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_count.txt" \
+&> "${OUT_DIR}/count_stats.txt"
+
+# output reads_per_base- this is the file we will start with, can use tpm but not as common these days
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0 \
+--min-read-percent-identity-pair 0.97 \
+--proper-pairs-only \
+-m reads_per_base \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_reads_per_base.txt" \
+&> "${OUT_DIR}/reads_per_base_stats.txt"
+
+#covered fraction
+coverm genome \
+--genome-fasta-extension fa \
+--genome-fasta-directory "$GENOME_DIR" \
+--bam-files "${BOWTIE_DB}"/*POSSORT.bam \
+--min-covered-fraction 0.75 \
+--min-read-percent-identity-pair 0.97 \
+--proper-pairs-only \
+-t 20 \
+--output-format dense \
+--output-file "${OUT_DIR}/coverm_min75.txt" \
+&> "${OUT_DIR}/min75_stats.txt"
+
+```
+
+
+coverM_min75.sh
+Submitted batch job 33330093
 
 ## Run DRAM on just genes
 
@@ -6065,7 +6247,7 @@ Submitted batch job 32973703
 
 
 
-## ~={red}Try a 25% subassembly=~
+## Try a 25% subassembly
 This will take a random subset of 25% of the reads from each sample and we will do another assembly to see if that adds bins. 
 
 ```
@@ -6274,7 +6456,7 @@ echo "All samples processed."
 12_pullseqs_2500_individual_assembly_megahit_25pcnt.sh
 Submitted batch job 33158623, done
 
-### ~={red}Individual assembly mapping for megahit_25pcnt=~
+### Individual assembly mapping for megahit_25pcnt
 - uses the contigs as the reference to get coverage
 - compares every paired end read from every sample to see where the reads map to the contigs (gives position information)
 
@@ -6324,9 +6506,9 @@ done < "$SAMPLE_LIST"
 echo "All samples processed."
 ```
 sbatch 13_bbmap_indiv_Assembly_megahit_25pcnt.sh
-Submitted batch job 33208253, RUNNING
+Submitted batch job 33208253, done
 
-### ~={red}Convert SAM to BAM files, sort, filter megahit_25pcnt=~
+### Convert SAM to BAM files, sort, filter megahit_25pcnt
 - BAM file is sorted based on its position in the reference, as determined by its alignment
 
 ```
@@ -6371,14 +6553,13 @@ echo "All samples complete."
 ```
 
 14_indiv_sort_megahit_25pcnt.sh
-Submitted batch job 
+Submitted batch job 33211893, done
 
 
-### ~={red}Reformat individual assembly files megahit_25pcnt at 95% id=~
+### Reformat individual assembly files megahit_25pcnt at 95% id
 BBTools reformat.sh script will filter to keep only the highest quality matches
 
 ```
-
 #!/bin/bash
 #SBATCH --job-name=indiv_reformat_megahit_25pcnt
 #SBATCH --nodes=1
@@ -6402,7 +6583,7 @@ BASE_DIR="/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG"
 
 while read SAMPLE; do
     MAPPED_DIR="${BASE_DIR}/${SAMPLE}/mapped_reads"
-    INPUT_BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sorted.bam.bam"
+    INPUT_BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped.sorted.bam"
 OUTPUT_BAM="${MAPPED_DIR}/${SAMPLE}_megahit_25pcnt_final.contigs_2500_mapped95per.sorted.bam"
     echo "Processing sample: $SAMPLE"
     if [[ -f "$INPUT_BAM" ]]; then
@@ -6424,15 +6605,15 @@ echo "All samples complete."
 
 ```
 15_indiv_reformat_megahit_25pcnt.sh
-Submitted batch job 
+Submitted batch job 33323816, done
 
-### ~={red}Individual assembly binning megahit_25pcnt=~
+### Individual assembly binning megahit_25pcnt
 ```
 #!/bin/bash
 #SBATCH --job-name=indiv_metabat_bin_megahit_25pcnt
 #SBATCH --nodes=1
 #SBATCH --ntasks=6
-#SBATCH --time=23:00:00
+#SBATCH --time=02:00:00
 #SBATCH --qos=cpu-normal
 #SBATCH --partition=acpu
 #SBATCH --mail-type=ALL
@@ -6475,9 +6656,11 @@ echo "All samples complete."
 ```
 
 16_indiv_metabat_bin_megahit_25pcnt.sh
-Submitted batch job 
+Submitted batch job 33326647
 
-### ~={red}Run CheckM for individual assembly megahit_25pcnt bins =~
+this only created 13 bins LOL abandoning this. 
+
+### [did not run] Run CheckM for individual assembly megahit_25pcnt bins 
 ```
 #!/bin/bash
 #SBATCH --job-name=indiv_checkM_95per_megahit_25pcnt
@@ -6615,7 +6798,7 @@ done
 
 
 
-### ~={red}Run dRep again on the M/HQ database from the megahit, IDBA (individual only), and magehit 25per bins so starting with the add#  bins=~
+#### [did not run] Run dRep again on the M/HQ database from the megahit, IDBA (individual only), and magehit 25per bins so starting with the add#  bins
 edit the folders to reflect number of starting bins
 ```
 #!/bin/bash
@@ -6696,11 +6879,11 @@ conda activate bbmap
 cd /scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/unmapped_reads
 
 #map to MQ and HQ MAG database to get the unmapped reads  
-bbmap.sh -Xmx200G threads=32 overwrite=t ref=all_dereplicated_MAGs.fa in1=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R1_bbduktrimmed.fastq in2=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R2_bbduktrimmed.fastq outu1=concat_R1_bbduktrimmed_unmapped.fastq outu2=concat_R2_bbduktrimmed_unmapped.fastq semiperfectmode=t
+bbmap.sh -Xmx200G threads=32 overwrite=t ref=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/MedHighQualityMAGs/dRep_bins_151/dereplicated_genomes/all_dereplicated_MAGs.fa in1=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R1_bbduktrimmed.fastq in2=/scratch/alpine/lindsval@colostate.edu/roberts_soils_metaG/concat_reads/concat_R2_bbduktrimmed.fastq outu1=concat_R1_bbduktrimmed_unmapped.fastq outu2=concat_R2_bbduktrimmed_unmapped.fastq semiperfectmode=t
 
 ```
 sbatch bbmap_get_unmapped_reads.sh
-Submitted batch job 33159431
+Submitted batch job 33323960
 
 ~={red}fix below...=~
 
